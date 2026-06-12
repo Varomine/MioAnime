@@ -1,0 +1,602 @@
+/* Torrent Page Styles - AniVault Premium Styling */
+
+.torrent-page {
+  min-height: 100vh;
+  padding-top: calc(var(--navbar-height) + 32px);
+  padding-bottom: var(--space-4xl);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  display: flex;
+  justify-content: center;
+}
+
+.torrent-container {
+  width: 100%;
+  max-width: var(--content-max-width);
+  padding: 0 var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+/* Header */
+.torrent-header {
+  text-align: center;
+  margin-bottom: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.torrent-badge-icon {
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  width: 50px;
+  height: 50px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-sm);
+  box-shadow: var(--shadow-md);
+}
+
+.torrent-title {
+  font-size: var(--font-3xl);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--text-primary) 30%, var(--accent-gold) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0;
+}
+
+.torrent-subtitle {
+  color: var(--text-secondary);
+  font-size: var(--font-base);
+  max-width: 560px;
+  line-height: 1.6;
+}
+
+.gold-text {
+  color: var(--accent-gold);
+}
+
+/* Search Panel */
+.torrent-search-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.torrent-search-form {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.torrent-input-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.torrent-input {
+  width: 100%;
+  height: 48px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 0 var(--space-lg) 0 44px;
+  color: var(--text-primary);
+  font-size: var(--font-base);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.torrent-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-gold);
+}
+
+.torrent-search-icon {
+  position: absolute;
+  left: var(--space-lg);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.torrent-submit-btn {
+  height: 48px;
+  padding: 0 var(--space-2xl);
+  background: linear-gradient(135deg, var(--accent-gold-dark), var(--accent-gold));
+  color: var(--bg-primary);
+  font-weight: 700;
+  border-radius: var(--radius-lg);
+  font-size: var(--font-base);
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(228, 168, 93, 0.2);
+}
+
+.torrent-submit-btn:hover {
+  transform: translateY(-1px);
+  opacity: 0.95;
+}
+
+.torrent-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Chips / Popular tags */
+.torrent-chips-container {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.torrent-chips-label {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+
+.torrent-chips {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.torrent-chip {
+  padding: 6px var(--space-md);
+  border-radius: var(--radius-full);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.torrent-chip:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+.torrent-chip.active {
+  background: var(--accent-gold-dim);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+/* Results Content */
+.torrent-results-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.torrent-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4xl) 0;
+  gap: var(--space-md);
+  color: var(--text-secondary);
+}
+
+.torrent-loading p {
+  font-size: var(--font-base);
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+.loading-spinner {
+  color: var(--accent-gold);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Error card */
+.torrent-error-card {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-md);
+  margin: var(--space-xl) 0;
+}
+
+.error-icon {
+  color: var(--danger);
+}
+
+.error-text h3 {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  margin-bottom: var(--space-xs);
+}
+
+.error-text p {
+  color: var(--text-secondary);
+  font-size: var(--font-base);
+  max-width: 480px;
+}
+
+.torrent-retry-btn {
+  padding: 8px var(--space-xl);
+  background-color: var(--bg-hover);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+
+.torrent-retry-btn:hover {
+  background-color: var(--danger);
+  border-color: var(--danger);
+  color: white;
+}
+
+/* Results Header */
+.torrent-results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-md);
+  padding: 0 var(--space-sm);
+}
+
+.results-count {
+  font-size: var(--font-base);
+  color: var(--text-secondary);
+}
+
+.results-count strong {
+  color: var(--text-primary);
+}
+
+.results-sorting-info {
+  font-size: var(--font-xs);
+  color: var(--accent-gold);
+  background: var(--accent-gold-dim);
+  padding: 4px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+/* Table Design */
+.torrent-table-container {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+.torrent-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.torrent-table th {
+  background-color: var(--bg-elevated);
+  padding: var(--space-lg);
+  font-size: var(--font-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.torrent-table td {
+  padding: var(--space-lg);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--font-base);
+  vertical-align: middle;
+}
+
+.torrent-table tbody tr {
+  transition: background-color var(--transition-fast);
+}
+
+.torrent-table tbody tr:hover {
+  background-color: var(--bg-hover);
+}
+
+/* Specific Columns */
+.th-title { width: 55%; }
+.th-size { width: 12%; }
+.th-seeders { width: 10%; }
+.th-leechers { width: 10%; }
+.th-actions { width: 13%; }
+
+.text-center { text-align: center; }
+.font-mono { font-family: monospace; font-size: var(--font-sm); color: var(--text-secondary); }
+.font-bold { font-weight: 700; }
+
+.torrent-display-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.seeder-badge {
+  color: var(--status-airing);
+  background-color: rgba(74, 222, 128, 0.1);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+}
+
+.leecher-badge {
+  color: var(--danger);
+  background-color: rgba(239, 68, 68, 0.1);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+}
+
+/* Actions Group */
+.torrent-actions-group {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: center;
+  align-items: center;
+}
+
+.torrent-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  height: 32px;
+  padding: 0 var(--space-sm);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  transition: all var(--transition-fast);
+  color: var(--text-secondary);
+}
+
+.action-btn-text {
+  display: none; /* Hide text on table view to save space, but can show on hover or cards */
+}
+
+/* Specific buttons styling */
+.magnet-btn:hover {
+  background-color: var(--accent-gold-dim);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+.magnet-btn.copied {
+  background-color: var(--success);
+  border-color: var(--success);
+  color: white;
+}
+
+.download-btn:hover {
+  background-color: rgba(96, 165, 250, 0.15);
+  border-color: var(--status-finished);
+  color: var(--status-finished);
+}
+
+.info-btn:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+/* Empty State */
+.torrent-empty-state {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--space-4xl) var(--space-2xl);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-lg);
+}
+
+.empty-icon {
+  color: var(--text-muted);
+  margin-bottom: var(--space-sm);
+}
+
+.torrent-empty-state h3 {
+  font-size: var(--font-xl);
+  color: var(--text-primary);
+  font-weight: 700;
+  margin: 0;
+}
+
+.empty-tip {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  margin-top: var(--space-sm);
+}
+
+/* Responsive Styles */
+@media (max-width: 1024px) {
+  .torrent-table th, .torrent-table td {
+    padding: var(--space-md);
+  }
+  .th-title { width: 45%; }
+  .th-size { width: 14%; }
+  .th-seeders { width: 12%; }
+  .th-leechers { width: 12%; }
+  .th-actions { width: 17%; }
+}
+
+@media (max-width: 768px) {
+  .torrent-page {
+    padding-top: calc(var(--navbar-height) + 16px);
+  }
+  
+  .torrent-search-form {
+    flex-direction: column;
+  }
+  
+  .torrent-submit-btn {
+    width: 100%;
+  }
+
+  .torrent-results-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-sm);
+  }
+
+  /* Transform table into card layout for mobile */
+  .torrent-table-container {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
+  .torrent-table, 
+  .torrent-table thead, 
+  .torrent-table tbody, 
+  .torrent-table th, 
+  .torrent-table td, 
+  .torrent-table tr {
+    display: block;
+  }
+
+  .torrent-table thead {
+    display: none; /* Hide column headers */
+  }
+
+  .torrent-table tbody tr {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    padding: var(--space-lg);
+    margin-bottom: var(--space-md);
+    box-shadow: var(--shadow-md);
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-sm);
+  }
+
+  .torrent-table tbody tr:hover {
+    background-color: var(--bg-card);
+    border-color: var(--border-default);
+  }
+
+  .torrent-table td {
+    border: none;
+    padding: 0;
+    text-align: left;
+    height: auto;
+  }
+
+  .torrent-table td.td-title {
+    grid-column: span 2;
+    margin-bottom: var(--space-xs);
+  }
+
+  .torrent-table td.td-size {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+  
+  .torrent-table td.td-size::before {
+    content: "Size:";
+    color: var(--text-muted);
+    font-size: var(--font-xs);
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  .torrent-table td.td-seeders {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-xs);
+  }
+
+  .torrent-table td.td-seeders::before {
+    content: "Seeds:";
+    color: var(--text-muted);
+    font-size: var(--font-xs);
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  .torrent-table td.td-leechers {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+
+  .torrent-table td.td-leechers::before {
+    content: "Leeches:";
+    color: var(--text-muted);
+    font-size: var(--font-xs);
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  .torrent-table td.td-actions {
+    grid-column: span 2;
+    margin-top: var(--space-sm);
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .torrent-actions-group {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .torrent-action-btn {
+    flex: 1;
+    height: 36px;
+  }
+
+  .action-btn-text {
+    display: inline; /* Show label text on mobile cards since they have more horizontal width */
+  }
+}

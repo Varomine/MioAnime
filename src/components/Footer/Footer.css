@@ -1,0 +1,56 @@
+/* ============================================
+   Footer — Minimal Premium Footer
+   ============================================ */
+
+.footer {
+  margin-top: auto;
+  padding: var(--space-3xl) var(--space-xl) var(--space-2xl);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.footer-inner {
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+/* ---- Brand ---- */
+.footer-brand {
+  font-size: var(--font-xl);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ---- Copy Text ---- */
+.footer-copy {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
+/* ============================================
+   Responsive
+   ============================================ */
+@media (max-width: 480px) {
+  .footer {
+    padding: var(--space-2xl) var(--space-lg) var(--space-xl);
+  }
+}
+
+.footer-disclaimer {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.5;
+  text-align: center;
+  max-width: 500px;
+  margin: 0;
+  line-height: 1.6;
+}
+

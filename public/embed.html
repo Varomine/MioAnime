@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MioAnime Premium Stream Player</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #000;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .artplayer-app {
+      width: 100%;
+      height: 100%;
+    }
+    .art-video {
+      background-color: #000 !important;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.18/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/artplayer@5.1.1/dist/artplayer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/artplayer-plugin-jassub/dist/artplayer-plugin-jassub.js"></script>
+</head>
+<body>
+  <div class="artplayer-app"></div>
+
+  <script>
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+      const fKeyNumber = e.key.startsWith('F') ? parseInt(e.key.substring(1), 10) : null;
+      if (e.key === 'F12' || (fKeyNumber && fKeyNumber >= 13 && fKeyNumber <= 24)) {
+        e.preventDefault();
+      }
+      if (e.ctrlKey && (e.key === 'i' || e.key === 'I' || e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S' || e.key === 'c' || e.key === 'C' || e.key === 'j' || e.key === 'J')) {
+        e.preventDefault();
+      }
+      if (e.ctrlKey && e.shiftKey && (e.key === 'i' || e.key === 'I' || e.key === 'c' || e.key === 'C' || e.key === 'j' || e.key === 'J')) {
+        e.preventDefault();
+      }
+    });
+
+    // Security: Detect DevTools activation inside iframe and redirect parent window to Google
+    const detectDevTools = () => {
+      const startTime = performance.now();
+      debugger;
+      const endTime = performance.now();
+      if (endTime - startTime > 100) {
+        if (window.parent && window.parent !== window) {
+          window.parent.location.replace("https://google.com");
+        } else {
+          window.location.replace("https://google.com");
+        }
+        return;
+      }
+
+      const element = new Image();
+      Object.defineProperty(element, 'id', {
+        get() {
+          if (window.parent && window.parent !== window) {
+            window.parent.location.replace("https://google.com");
+          } else {
+            window.location.replace("https://google.com");
+          }
+        }
+      });
+      console.log(element);
+    };
+    setInterval(detectDevTools, 1000);
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const singleUrl = urlParams.get('url');
+    const sourcesParam = urlParams.get('sources');
+    const subtitlesParam = urlParams.get('subtitles');
+    const posterUrl = urlParams.get('poster') || '';
+    const initialTime = parseFloat(urlParams.get('t') || '0');
+
+    let videoUrl = '';
+    let qualityList = [];
+
+    // Helper to determine if a URL is HLS
+    function checkIsHls(url) {
+      if (!url) return false;
+      const lower = url.toLowerCase();
+      return lower.includes('.m3u8') || 
+             lower.includes('index.txt') || 
+             lower.includes('/stream/') || 
+             lower.includes('koyeb.app/proxy');
+    }
+
+    // Helper to load cross-origin worker via Blob URL
+    function createWorkerBlob(url) {
+      const blob = new Blob([`importScripts("${url}");`], { type: 'text/javascript' });
+      return URL.createObjectURL(blob);
+    }
+
+    if (sourcesParam) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(sourcesParam));
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Sort qualities descending: 1080p > 720p > 480p > 360p
+          const priority = ['1080p', '720p', '480p', '360p'];
+          parsed.sort((a, b) => {
+            const indexA = priority.indexOf(a.quality);
+            const indexB = priority.indexOf(b.quality);
+            if (indexA === -1 && indexB === -1) return 0;
+            if (indexA === -1) return 1;
+            if (indexB === -1) return -1;
+            return indexA - indexB;
+          });
+
+          qualityList = parsed.map((item, idx) => {
+            let itemUrl = item.streamUrl || item.url;
+            if (checkIsHls(itemUrl) && !itemUrl.includes('#')) {
+              itemUrl += '#file.m3u8';
+            }
+            return {
+              html: item.quality,
+              url: itemUrl,
+              default: idx === 0,
+            };
+          });
+
+          videoUrl = qualityList[0].url;
+        }
+      } catch (e) {
+        console.error('Failed to parse sources JSON:', e);
+      }
+    }
+
+    if (!videoUrl && singleUrl) {
+      videoUrl = singleUrl;
+      if (checkIsHls(videoUrl) && !videoUrl.includes('#')) {
+        videoUrl += '#file.m3u8';
+      }
+    }
+
+    // Helper to proxy cross-origin subtitles to bypass CORS
+    function getProxiedSubtitleUrl(url) {
+      if (!url) return '';
+      try {
+        const urlObj = new URL(url, window.location.href);
+        if (urlObj.origin !== window.location.origin) {
+          return `https://proxy.corsfix.com/?url=${encodeURIComponent(url)}`;
+        }
+      } catch (e) {
+        console.error('Failed to parse subtitle URL for proxy:', e);
+      }
+      return url;
+    }
+
+    // Subtitles parsing
+    let subtitleList = [];
+    if (subtitlesParam) {
+      try {
+        const parsedSubs = JSON.parse(decodeURIComponent(subtitlesParam));
+        if (Array.isArray(parsedSubs) && parsedSubs.length > 0) {
+          subtitleList = parsedSubs.map((sub, idx) => {
+            return {
+              html: sub.label || sub.name || sub.lang || sub.language || `Track ${idx + 1}`,
+              url: sub.url,
+              default: idx === 0, // default to first one
+            };
+          });
+        }
+      } catch (e) {
+        console.error('Failed to parse subtitles:', e);
+      }
+    }
+
+    if (videoUrl) {
+      const isHls = checkIsHls(videoUrl);
+      const defaultSub = subtitleList.find(sub => sub.default) || subtitleList[0];
+      const initialSubUrl = defaultSub ? defaultSub.url : '';
+      const cleanSubUrlPath = initialSubUrl.split('?')[0].split('#')[0].toLowerCase();
+      const isInitialAss = cleanSubUrlPath.endsWith('.ass');
+      const finalInitialSubUrl = isInitialAss || cleanSubUrlPath.endsWith('.srt') || cleanSubUrlPath.endsWith('.vtt')
+        ? getProxiedSubtitleUrl(initialSubUrl)
+        : initialSubUrl;
+
+      const artConfig = {
+        container: '.artplayer-app',
+        url: videoUrl,
+        type: isHls ? 'm3u8' : '',
+        poster: posterUrl,
+        volume: 0.8,
+        isLive: false,
+        muted: false,
+        autoplay: true,
+        pip: true,
+        autoSize: true,
+        autoMini: false,
+        screenshot: false,
+        setting: true,
+        loop: false,
+        flip: false,
+        playbackRate: true,
+        aspectRatio: true,
+        fullscreen: true,
+        fullscreenWeb: false,
+        miniProgressBar: true,
+        mutex: true,
+        backdrop: true,
+        playsInline: true,
+        autoPlayback: true,
+        theme: '#E4A85D', // Luxury Gold theme!
+        quality: qualityList,
+        customType: {
+          m3u8: function (video, url, artplayer) {
+            if (Hls.isSupported()) {
+              if (artplayer.hls) {
+                artplayer.hls.destroy();
+              }
+              const hls = new Hls({
+                enableWorker: true,
+                lowLatencyMode: false,
+                maxBufferLength: 30,
+                enableSoftwareAES: true,
+              });
+              hls.loadSource(url);
+              hls.attachMedia(video);
+              artplayer.hls = hls;
+
+              if (qualityList.length === 0) {
+                hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                  const levels = hls.levels;
+                  if (levels && levels.length > 1) {
+                    const mappedQualities = levels.map((level, index) => ({
+                      html: level.height + 'P',
+                      index: index,
+                    }));
+                    mappedQualities.unshift({ html: 'Auto', index: -1 });
+
+                    artplayer.setting.update({
+                      name: 'quality',
+                      html: 'Quality',
+                      width: 150,
+                      selector: mappedQualities,
+                      onSelect: function (item) {
+                        hls.currentLevel = item.index;
+                        return item.html;
+                      },
+                    });
+                  }
+                });
+              }
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+              video.src = url;
+            } else {
+              artplayer.notice.show = 'HLS is not supported in this browser';
+            }
+          }
+        }
+      };
+
+      // Native subtitle settings (only for non-ASS files)
+      if (initialSubUrl && !isInitialAss) {
+        artConfig.subtitle = {
+          url: finalInitialSubUrl,
+          type: initialSubUrl.split('?')[0].split('#')[0].toLowerCase().endsWith('.srt') ? 'srt' : 'vtt',
+          style: {
+            color: '#fff',
+            fontSize: '22px',
+          }
+        };
+      }
+
+      // Add custom settings menu for subtitles if we have subtitles
+      if (subtitleList.length > 0) {
+        const selectorOptions = subtitleList.map((sub, idx) => ({
+          html: sub.html,
+          url: sub.url,
+          index: idx,
+          default: sub.default,
+        }));
+        selectorOptions.push({
+          html: 'Off',
+          url: '',
+          index: -1,
+          default: !defaultSub,
+        });
+
+        artConfig.settings = [
+          {
+            name: 'subtitle-select',
+            html: 'Subtitle',
+            width: 200,
+            selector: selectorOptions,
+            onSelect: function (item) {
+              const url = item.url;
+              const cleanPath = url.split('?')[0].split('#')[0].toLowerCase();
+              const isItemAss = cleanPath.endsWith('.ass');
+              const proxiedUrl = isItemAss || cleanPath.endsWith('.srt') || cleanPath.endsWith('.vtt')
+                ? getProxiedSubtitleUrl(url)
+                : url;
+
+              if (art.jassub) {
+                art.jassub.destroy();
+                art.jassub = null;
+              }
+
+              if (isItemAss) {
+                art.subtitle.show = false;
+                if (typeof artplayerPluginJassub !== 'undefined') {
+                  const pluginInitializer = artplayerPluginJassub({
+                    subUrl: proxiedUrl,
+                    workerUrl: createWorkerBlob('https://cdn.jsdelivr.net/npm/jassub@1.8.8/dist/jassub-worker.js'),
+                    wasmUrl: 'https://cdn.jsdelivr.net/npm/jassub@1.8.8/dist/jassub-worker.wasm',
+                    modernWasmUrl: 'https://cdn.jsdelivr.net/npm/jassub@1.8.8/dist/jassub-worker-modern.wasm',
+                    legacyWasmUrl: 'https://cdn.jsdelivr.net/npm/jassub@1.8.8/dist/jassub-worker.wasm.js',
+                    availableFonts: {
+                      'liberation sans': 'https://cdn.jsdelivr.net/npm/jassub@1.8.8/dist/default.woff2',
+                      'noto sans jp': 'https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-jp@latest/japanese-400-normal.woff2',
+                      'noto sans jp regular': 'https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-jp@latest/japanese-400-normal.woff2',
+                      'noto sans thai': 'https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-thai@latest/thai-400-normal.woff2',
+                      'noto sans thai regular': 'https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-thai@latest/thai-400-normal.woff2'
+                    },
+                  });
+                  const pluginResult = pluginInitializer(art);
+                  art.jassub = pluginResult.instance;
+                }
+              } else if (url) {
+                art.subtitle.url = proxiedUrl;
+                art.subtitle.show = true;
+              } else {
+                art.subtitle.show = false;
+              }
+              return item.html;
+            }
+          }
+        ];
+      }
+
+      const art = new Artplayer(artConfig);
+
+      // Handle custom type for direct video files if we switch quality
+      art.on('change:quality', (item) => {
+        const nextUrl = item.url;
+        const isNextHls = checkIsHls(nextUrl);
+        
+        if (isNextHls && Hls.isSupported()) {
+          art.video.pause();
+          if (art.hls) {
+            art.hls.destroy();
+            art.hls = null;
+          }
+          const hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: false,
+            maxBufferLength: 30,
+            enableSoftwareAES: true,
+          });
+          hls.loadSource(nextUrl);
+          hls.attachMedia(art.video);
+          art.hls = hls;
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            art.video.play().catch(() => {});
+          });
+        }
+      });
+
+      // Load initial ASS subtitle if applicable on player ready
+      art.on('ready', () => {
+        if (isInitialAss && typeof artplayerPluginJassub !== 'undefined') {
+          const pluginInitializer = artplayerPluginJassub({
+            subUrl: finalInitialSubUrl,
+            workerUrl: createWorkerBlob('https://cdn.jsdelivr.net/npm/jassub@1.8.8/dist/jassub-worker.js'),
+            wasmUrl: 'https://cdn.jsdelivr.net/npm/jassub@1.8.8/dist/jassub-worker.wasm',
+            modernWasmUrl: 'https://cdn.jsdelivr.net/npm/jassub@1.8.8/dist/jassub-worker-modern.wasm',
+            legacyWasmUrl: 'https://cdn.jsdelivr.net/npm/jassub@1.8.8/dist/jassub-worker.wasm.js',
+            availableFonts: {
+              'liberation sans': 'https://cdn.jsdelivr.net/npm/jassub@1.8.8/dist/default.woff2',
+              'noto sans jp': 'https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-jp@latest/japanese-400-normal.woff2',
+              'noto sans jp regular': 'https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-jp@latest/japanese-400-normal.woff2',
+              'noto sans thai': 'https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-thai@latest/thai-400-normal.woff2',
+              'noto sans thai regular': 'https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-thai@latest/thai-400-normal.woff2'
+            },
+          });
+          const pluginResult = pluginInitializer(art);
+          art.jassub = pluginResult.instance;
+        }
+      });
+
+      // Handle initial seek time
+      art.on('video:loadedmetadata', () => {
+        if (initialTime > 0) {
+          art.video.currentTime = initialTime;
+        }
+      });
+
+      // Propagate timeupdate to parent window for watch progress tracking
+      art.on('video:timeupdate', () => {
+        if (window.parent) {
+          window.parent.postMessage({
+            type: 'PLAYER_TIMEUPDATE',
+            currentTime: art.video.currentTime,
+            duration: art.video.duration
+          }, '*');
+        }
+      });
+
+      // Clean up instances on destroy
+      art.on('destroy', () => {
+        if (art.hls) {
+          art.hls.destroy();
+          art.hls = null;
+        }
+        if (art.jassub) {
+          art.jassub.destroy();
+          art.jassub = null;
+        }
+      });
+    }
+  </script>
+</body>
+</html>

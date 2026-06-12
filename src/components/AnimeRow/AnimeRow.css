@@ -1,0 +1,227 @@
+/* ============================================
+   AnimeRow — Netflix-style Horizontal Scroll
+   ============================================ */
+
+.anime-row {
+  margin-bottom: var(--space-4xl);
+}
+
+/* ---- Header ---- */
+.anime-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-xl);
+  padding: 0 var(--space-xl);
+}
+
+.anime-row-title {
+  font-size: var(--font-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+}
+
+.anime-row-view-all {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--accent-gold);
+  text-decoration: none;
+  transition: color var(--transition-fast), gap var(--transition-fast);
+  white-space: nowrap;
+}
+
+.anime-row-view-all:hover {
+  color: var(--accent-gold-light);
+  gap: var(--space-sm);
+}
+
+/* ---- Wrapper (for arrow positioning and fading edges) ---- */
+.anime-row-wrapper {
+  position: relative;
+}
+
+.anime-row-wrapper::before,
+.anime-row-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 60px;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.anime-row-wrapper::before {
+  left: 0;
+  background: linear-gradient(to right, var(--bg-primary) 0%, transparent 100%);
+}
+
+.anime-row-wrapper::after {
+  right: 0;
+  background: linear-gradient(to left, var(--bg-primary) 0%, transparent 100%);
+}
+
+.anime-row-wrapper.has-fade-left::before {
+  opacity: 1;
+}
+
+.anime-row-wrapper.has-fade-right::after {
+  opacity: 1;
+}
+
+/* ---- Scrollable Container ---- */
+.anime-row-container {
+  display: flex;
+  gap: var(--space-lg);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  padding: var(--space-sm) var(--space-xl);
+  /* hide scrollbar */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.anime-row-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Each card inside the row */
+.anime-row-container .anime-card {
+  min-width: 180px;
+  max-width: 200px;
+  flex-shrink: 0;
+}
+
+/* ---- Arrow Buttons ---- */
+.anime-row-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--bg-card-rgb), 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  cursor: pointer;
+  z-index: 20;
+  opacity: 0;
+  transition: opacity var(--transition-fast),
+              background var(--transition-fast),
+              color var(--transition-fast),
+              transform var(--transition-fast);
+  box-shadow: var(--shadow-md);
+}
+
+.anime-row-wrapper:hover .anime-row-arrow {
+  opacity: 1;
+}
+
+.anime-row-arrow:hover {
+  background: var(--accent-gold);
+  color: #000;
+  border-color: var(--accent-gold);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.anime-row-arrow.left {
+  left: 8px;
+}
+
+.anime-row-arrow.right {
+  right: 8px;
+}
+
+.anime-row-arrow.hidden {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+/* ---- Skeleton Row ---- */
+.anime-row-skeleton {
+  display: flex;
+  gap: var(--space-lg);
+  padding: var(--space-sm) var(--space-xs);
+}
+
+.anime-row-skeleton-card {
+  min-width: 180px;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--radius-lg);
+  flex-shrink: 0;
+  background: linear-gradient(
+    90deg,
+    var(--bg-elevated) 25%,
+    var(--bg-hover) 50%,
+    var(--bg-elevated) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ============================================
+   Responsive
+   ============================================ */
+@media (max-width: 768px) {
+  .anime-row-wrapper::before,
+  .anime-row-wrapper::after {
+    width: 40px;
+  }
+
+  .anime-row-header {
+    padding: 0 var(--space-xl);
+  }
+
+  .anime-row-container {
+    padding: var(--space-sm) var(--space-xl);
+  }
+
+  .anime-row-container .anime-card {
+    min-width: 170px;
+  }
+
+  .anime-row-skeleton-card {
+    min-width: 170px;
+  }
+
+  .anime-row-arrow {
+    display: none;
+  }
+
+  .anime-row-title {
+    font-size: var(--font-lg);
+  }
+}
+
+@media (max-width: 480px) {
+  .anime-row-header {
+    padding: 0 20px;
+  }
+
+  .anime-row-container {
+    padding: var(--space-sm) 20px;
+  }
+
+  .anime-row-container .anime-card {
+    min-width: 150px;
+  }
+
+  .anime-row-skeleton-card {
+    min-width: 150px;
+  }
+
+  .anime-row {
+    margin-bottom: var(--space-2xl);
+  }
+}
