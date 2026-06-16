@@ -377,3 +377,9 @@
   color: #ef4444;
 }
 
+.server-dropdown-tag.ads {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+

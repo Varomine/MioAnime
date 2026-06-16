@@ -6,6 +6,13 @@ export default defineConfig({
   server: {
     allowedHosts: [
       'nonexperimental-pseudofeverish-ouida.ngrok-free.dev'
-    ]
+    ],
+    proxy: {
+      '/onsen-api': {
+        target: 'https://anime-onsen-api.vercel.app',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/onsen-api/, '')
+      }
+    }
   }
 })

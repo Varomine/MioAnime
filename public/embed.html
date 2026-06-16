@@ -25,6 +25,7 @@
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.18/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/artplayer@5.1.1/dist/artplayer.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/artplayer-plugin-jassub/dist/artplayer-plugin-jassub.js"></script>
 </head>
@@ -94,6 +95,13 @@
              lower.includes('koyeb.app/proxy');
     }
 
+    // Helper to determine if a URL is DASH (MPD)
+    function checkIsMpd(url) {
+      if (!url) return false;
+      const lower = url.toLowerCase();
+      return lower.includes('.mpd');
+    }
+
     // Helper to load cross-origin worker via Blob URL
     function createWorkerBlob(url) {
       const blob = new Blob([`importScripts("${url}");`], { type: 'text/javascript' });
@@ -147,7 +155,10 @@
       try {
         const urlObj = new URL(url, window.location.href);
         if (urlObj.origin !== window.location.origin) {
-          return `https://proxy.corsfix.com/?url=${encodeURIComponent(url)}`;
+          if (urlObj.hostname === 'anime-onsen-api.vercel.app') {
+            return `/onsen-api${urlObj.pathname}${urlObj.search}`;
+          }
+          return `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
         }
       } catch (e) {
         console.error('Failed to parse subtitle URL for proxy:', e);
@@ -187,7 +198,7 @@
       const artConfig = {
         container: '.artplayer-app',
         url: videoUrl,
-        type: isHls ? 'm3u8' : '',
+        type: isHls ? 'm3u8' : (checkIsMpd(videoUrl) ? 'mpd' : ''),
         poster: posterUrl,
         volume: 0.8,
         isLive: false,
@@ -254,6 +265,18 @@
               video.src = url;
             } else {
               artplayer.notice.show = 'HLS is not supported in this browser';
+            }
+          },
+          mpd: function (video, url, artplayer) {
+            if (typeof dashjs !== 'undefined') {
+              if (artplayer.dash) {
+                artplayer.dash.destroy();
+              }
+              const player = dashjs.MediaPlayer().create();
+              player.initialize(video, url, true);
+              artplayer.dash = player;
+            } else {
+              artplayer.notice.show = 'DASH/MPD is not supported';
             }
           }
         }
@@ -326,7 +349,8 @@
                   art.jassub = pluginResult.instance;
                 }
               } else if (url) {
-                art.subtitle.url = proxiedUrl;
+                const isSrt = cleanPath.endsWith('.srt');
+                art.subtitle.switch(proxiedUrl, { type: isSrt ? 'srt' : 'vtt' });
                 art.subtitle.show = true;
               } else {
                 art.subtitle.show = false;
@@ -410,6 +434,10 @@
         if (art.hls) {
           art.hls.destroy();
           art.hls = null;
+        }
+        if (art.dash) {
+          art.dash.destroy();
+          art.dash = null;
         }
         if (art.jassub) {
           art.jassub.destroy();

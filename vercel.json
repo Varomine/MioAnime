@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/onsen-api/:path*",
+      "destination": "https://anime-onsen-api.vercel.app/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

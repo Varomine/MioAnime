@@ -8,7 +8,9 @@ import { getHAnimeStreams } from '../../services/hanimeApi';
 import { searchAniZone, getAniZoneEpisodes, getAniZoneStream } from '../../services/anizoneApi';
 import { searchVerse, getVerseStream } from '../../services/verseApi';
 import { getSenshiStream } from '../../services/senshiApi';
+import { getOnsenStream } from '../../services/onsenApi';
 import { getAnimeById, getAnimeRelations, getStatusText, getStatusClass } from '../../services/jikanApi';
+import { searchReAnime, getReAnimeStream } from '../../services/reanimeApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { addBookmark, removeBookmark, isBookmarked, updateBookmarkCategory, getBookmarks } from '../../services/bookmarkService';
@@ -181,6 +183,70 @@ function findBestVerseMatch(animeData, items) {
   return validMatches[0].result;
 }
 
+function findBestReAnimeMatch(animeData, results) {
+  if (!animeData || !results || results.length === 0) return null;
+
+  const targetTitles = [
+    animeData.title,
+    animeData.title_english,
+    ...(animeData.title_synonyms || [])
+  ].filter(Boolean);
+
+  const scoredResults = results.map(r => {
+    const resultTitles = [
+      r.title?.english,
+      r.title?.romaji,
+      r.title?.user_preferred,
+      typeof r.title === 'string' ? r.title : null
+    ].filter(Boolean);
+
+    let bestScore = 0;
+
+    for (const t of targetTitles) {
+      const tNorm = normalizeTitle(t);
+      const tSeason = getSeasonNumber(t) || 1;
+      const tBase = cleanTitleForBaseComparison(tNorm);
+
+      for (const rT of resultTitles) {
+        const rNorm = normalizeTitle(rT);
+        const rSeason = getSeasonNumber(rNorm) || 1;
+        const rBase = cleanTitleForBaseComparison(rNorm);
+
+        if (tSeason !== rSeason) continue;
+
+        if (tBase === rBase) {
+          bestScore = Math.max(bestScore, 100);
+        } else if (tBase.includes(rBase) || rBase.includes(tBase)) {
+          const ratio = Math.min(tBase.length, rBase.length) / Math.max(tBase.length, rBase.length);
+          const score = 50 + Math.floor(ratio * 40);
+          bestScore = Math.max(bestScore, score);
+        } else {
+          const tTokens = tBase.split(' ').filter(tk => tk.length > 2);
+          const rTokens = rBase.split(' ').filter(tk => tk.length > 2);
+          if (tTokens.length > 0 && rTokens.length > 0) {
+            const common = tTokens.filter(tk => rTokens.includes(tk));
+            const ratioTarget = common.length / tTokens.length;
+            const ratioResult = common.length / rTokens.length;
+            const maxRatio = Math.max(ratioTarget, ratioResult);
+            if (maxRatio >= 0.7) {
+              const score = Math.floor(maxRatio * 50);
+              bestScore = Math.max(bestScore, score);
+            }
+          }
+        }
+      }
+    }
+
+    return { result: r, score: bestScore };
+  });
+
+  const validMatches = scoredResults.filter(item => item.score > 0);
+  if (validMatches.length === 0) return null;
+
+  validMatches.sort((a, b) => b.score - a.score);
+  return validMatches[0].result;
+}
+
 // Cache slugs to avoid re-searching
 const slugCache = new Map();
 
@@ -213,16 +279,17 @@ function Streaming({ onShowAuth }) {
 
   const [currentEpisode, setCurrentEpisode] = useState(parseInt(episodeParam) || 1);
   const [streamSources, setStreamSources] = useState([]);
+  const [subtitles, setSubtitles] = useState([]);
   const [introTimestamp, setIntroTimestamp] = useState(null);
   const [outroTimestamp, setOutroTimestamp] = useState(null);
 
-  const [activeServer, setActiveServer] = useState(defaultServer || 'neko');
+  const [activeServer, setActiveServer] = useState(defaultServer === 'miko' ? 'koto' : (defaultServer || 'neko'));
   const [showServerModal, setShowServerModal] = useState(false);
   const [selectedNekoSourceIndex, setSelectedNekoSourceIndex] = useState(0);
 
   // Report Modal States
   const [showReportModal, setShowReportModal] = useState(false);
-  const [reportServer, setReportServer] = useState(defaultServer || 'neko');
+  const [reportServer, setReportServer] = useState(defaultServer === 'miko' ? 'koto' : (defaultServer || 'neko'));
   const [reportProblem, setReportProblem] = useState('Server not working');
   const [reportNote, setReportNote] = useState('');
   const [reportSending, setReportSending] = useState(false);
@@ -453,6 +520,11 @@ function Streaming({ onShowAuth }) {
   const [verseId, setVerseId] = useState(null);
   const [verseLoading, setVerseLoading] = useState(false);
   const [verseError, setVerseError] = useState(null);
+
+  const [reAnimeId, setReAnimeId] = useState(null);
+  const [reAnimeLoading, setReAnimeLoading] = useState(false);
+  const [reAnimeError, setReAnimeError] = useState(null);
+  const [reAnimeEmbedUrl, setReAnimeEmbedUrl] = useState(null);
 
   const [bookmarked, setBookmarked] = useState(false);
   const [bookmarkCategory, setBookmarkCategory] = useState('');
@@ -694,6 +766,37 @@ function Streaming({ onShowAuth }) {
     }
   }
 
+  // Search Re:Anime for matching anime
+  async function searchReAnimeForAnime(animeData, cancelled) {
+    setReAnimeLoading(true);
+    setReAnimeError(null);
+
+    const titles = [...new Set([
+      animeData.title,
+      animeData.title_japanese,
+    ].filter(Boolean))];
+
+    for (const title of titles) {
+      if (cancelled) return;
+      try {
+        const items = await searchReAnime(title);
+        const match = findBestReAnimeMatch(animeData, items);
+        if (match && match.anime_id) {
+          setReAnimeId(match.anime_id);
+          setReAnimeLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.error(`Re:Anime search failed for "${title}":`, err);
+      }
+    }
+
+    if (!cancelled) {
+      setReAnimeError('Anime not found on Re:Anime server.');
+      setReAnimeLoading(false);
+    }
+  }
+
   // ---- Step 1+2: Fetch Jikan + search Anikage IN PARALLEL ----
   useEffect(() => {
     let cancelled = false;
@@ -719,6 +822,10 @@ function Streaming({ onShowAuth }) {
       setAniZoneEpisodes([]);
       setVerseId(null);
       setVerseError(null);
+      setReAnimeId(null);
+      setReAnimeLoading(false);
+      setReAnimeError(null);
+      setReAnimeEmbedUrl(null);
     });
     resolvedForId.current = null;
 
@@ -765,6 +872,9 @@ function Streaming({ onShowAuth }) {
 
         // Search Verse
         searchVerseForAnime(data.data, cancelled);
+
+        // Search Re:Anime
+        searchReAnimeForAnime(data.data, cancelled);
       } catch (err) {
         if (!cancelled) { console.error('Jikan error:', err); setAnimeLoading(false); }
       }
@@ -801,7 +911,8 @@ function Streaming({ onShowAuth }) {
     let cancelled = false;
 
     const fetchStream = async () => {
-      if (activeServer === 'neko' || activeServer === 'miko') {
+      setSubtitles([]);
+      if (activeServer === 'neko') {
         if (!anikageSlug) return;
         setSourceLoading(true);
         setSourceError(null);
@@ -945,12 +1056,63 @@ function Streaming({ onShowAuth }) {
         } finally {
           if (!cancelled) setSourceLoading(false);
         }
+      } else if (activeServer === 'onsen') {
+        setSourceLoading(true);
+        setSourceError(null);
+        setStreamSources([]);
+
+        try {
+          const data = await getOnsenStream(id, currentEpisode);
+          if (cancelled) return;
+          if (!data || !data.stream_url) {
+            setSourceError('No streaming source for this episode on Onsen.');
+            return;
+          }
+          setStreamSources([{ quality: 'Onsen DASH', streamUrl: data.stream_url }]);
+
+          if (data.subtitles && typeof data.subtitles === 'object') {
+            const parsedSubs = [];
+            Object.entries(data.subtitles).forEach(([langCode, url]) => {
+              const label = data.subtitle_languages?.[langCode] || langCode;
+              parsedSubs.push({
+                label: label,
+                lang: langCode,
+                url: url
+              });
+            });
+            setSubtitles(parsedSubs);
+          }
+        } catch (err) {
+          if (!cancelled) { console.error('Onsen stream fetch error:', err); setSourceError('Failed to load stream.'); }
+        } finally {
+          if (!cancelled) setSourceLoading(false);
+        }
+      } else if (activeServer === 'reanime') {
+        if (!reAnimeId) return;
+        setSourceLoading(true);
+        setSourceError(null);
+        setReAnimeEmbedUrl(null);
+        setStreamSources([]);
+
+        try {
+          const embedUrl = await getReAnimeStream(reAnimeId, currentEpisode);
+          if (cancelled) return;
+          if (!embedUrl) {
+            setSourceError('No streaming source for this episode on Re:Anime.');
+            return;
+          }
+          setReAnimeEmbedUrl(embedUrl);
+        } catch (err) {
+          if (!cancelled) { console.error('Re:Anime stream fetch error:', err); setSourceError('Failed to load stream.'); }
+        } finally {
+          if (!cancelled) setSourceLoading(false);
+        }
       }
     };
 
     fetchStream();
     return () => { cancelled = true; };
-  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniZoneId, aniZoneEpisodes, verseId, currentEpisode, anime, id]);
+  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniZoneId, aniZoneEpisodes, verseId, reAnimeId, currentEpisode, anime, id]);
 
   // ---- Related anime (relations from Jikan API, only anime) ----
   useEffect(() => {
@@ -1170,7 +1332,7 @@ function Streaming({ onShowAuth }) {
       }
     }
 
-    if (activeServer === 'neko' || activeServer === 'miko') {
+    if (activeServer === 'neko') {
       if (anikageEpisodes.length > 0) {
         return anikageEpisodes.filter(ep => ep.number > 0).sort((a, b) => a.number - b.number);
       }
@@ -1239,10 +1401,10 @@ function Streaming({ onShowAuth }) {
 
   // ---- Update watch history when anime and episode are playing ----
   useEffect(() => {
-    if (anime && (streamSources.length > 0 || activeServer === 'koto' || activeServer === 'zone' || activeServer === 'verse' || activeServer === 'senshi' || (activeServer === '123' && oneTwoThreeEmbedUrl))) {
+    if (anime && (streamSources.length > 0 || activeServer === 'koto' || activeServer === 'zone' || activeServer === 'verse' || activeServer === 'senshi' || (activeServer === '123' && oneTwoThreeEmbedUrl) || (activeServer === 'reanime' && reAnimeEmbedUrl))) {
       updateWatchHistory(anime, currentEpisode, currentEpInfo?.img);
     }
-  }, [anime, currentEpisode, streamSources, currentEpInfo, activeServer, oneTwoThreeEmbedUrl]);
+  }, [anime, currentEpisode, streamSources, currentEpInfo, activeServer, oneTwoThreeEmbedUrl, reAnimeEmbedUrl]);
 
   // ---- Episode nav handlers ----
   const handleEpisodeSelect = useCallback((n) => { if (n !== currentEpisode) setCurrentEpisode(n); }, [currentEpisode]);
@@ -1284,7 +1446,6 @@ function Streaming({ onShowAuth }) {
                 allowFullScreen
                 scrolling="no"
                 allow="autoplay; fullscreen; picture-in-picture"
-                sandbox="allow-scripts allow-same-origin"
                 title={`${titleDisplay} - Episode ${currentEpisode} (Koto)`}
               />
             ) : activeServer === '123' ? (
@@ -1444,6 +1605,59 @@ function Streaming({ onShowAuth }) {
                 <div className="streaming-player-error">
                   <AlertCircle size={40} />
                   <span>No streaming source available for Verse.</span>
+                </div>
+              )
+            ) : activeServer === 'onsen' ? (
+              sourceLoading || initialProgress === null ? (
+                <div className="streaming-player-loading">
+                  <div className="spinner" />
+                  <span>{`Loading ep ${currentEpisode} on Onsen...`}</span>
+                </div>
+              ) : sourceError ? (
+                <div className="streaming-player-error">
+                  <AlertCircle size={40} />
+                  <span>{sourceError}</span>
+                </div>
+              ) : streamSources.length > 0 ? (
+                <iframe
+                  src={`/embed.html?sources=${encodeURIComponent(JSON.stringify(streamSources))}&subtitles=${encodeURIComponent(JSON.stringify(subtitles))}&poster=${encodeURIComponent(anime?.images?.jpg?.large_image_url || '')}&t=${initialProgress}`}
+                  className="streaming-iframe"
+                  allowFullScreen
+                  scrolling="no"
+                  allow="autoplay; fullscreen; picture-in-picture"
+                  title={`${titleDisplay} - Episode ${currentEpisode} (Onsen)`}
+                />
+              ) : (
+                <div className="streaming-player-error">
+                  <AlertCircle size={40} />
+                  <span>No streaming source available for Onsen.</span>
+                </div>
+              )
+            ) : activeServer === 'reanime' ? (
+              reAnimeLoading || sourceLoading || initialProgress === null ? (
+                <div className="streaming-player-loading">
+                  <div className="spinner" />
+                  <span>{reAnimeLoading ? 'Finding anime on Re:Anime...' : `Loading ep ${currentEpisode}...`}</span>
+                </div>
+              ) : reAnimeError || sourceError ? (
+                <div className="streaming-player-error">
+                  <AlertCircle size={40} />
+                  <span>{reAnimeError || sourceError}</span>
+                </div>
+              ) : reAnimeEmbedUrl ? (
+                <iframe
+                  src={reAnimeEmbedUrl}
+                  className="streaming-iframe"
+                  allowFullScreen
+                  scrolling="no"
+                  allow="autoplay; fullscreen; picture-in-picture"
+                  sandbox="allow-scripts allow-same-origin"
+                  title={`${titleDisplay} - Episode ${currentEpisode} (Re:Anime)`}
+                />
+              ) : (
+                <div className="streaming-player-error">
+                  <AlertCircle size={40} />
+                  <span>No streaming source available for Re:Anime.</span>
                 </div>
               )
             ) : sourceLoading || searchLoading || initialProgress === null ? (
@@ -1936,6 +2150,7 @@ function Streaming({ onShowAuth }) {
                   <div className="server-tags">
                     <span className="server-tag best">Fast</span>
                     <span className="server-tag">EN</span>
+                    <span className="server-tag ads">Ads</span>
                   </div>
                 </div>
                 <span className="server-status-dot" />
@@ -1993,20 +2208,39 @@ function Streaming({ onShowAuth }) {
               </button>
               <button
                 type="button"
-                className={`server-modal-option ${activeServer === 'miko' ? 'active' : ''}`}
+                className={`server-modal-option ${activeServer === 'onsen' ? 'active' : ''}`}
                 onClick={() => {
-                  setActiveServer('miko');
+                  setActiveServer('onsen');
                   setShowServerModal(false);
                 }}
               >
                 <div className="server-modal-details">
-                  <span className="server-name">Miko</span>
+                  <span className="server-name">Onsen</span>
+                  <div className="server-tags">
+                    <span className="server-tag best">Fast</span>
+                    <span className="server-tag">EN</span>
+                  </div>
+                </div>
+                <span className="server-status-dot" />
+              </button>
+
+              <button
+                type="button"
+                className={`server-modal-option ${activeServer === 'reanime' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveServer('reanime');
+                  setShowServerModal(false);
+                }}
+              >
+                <div className="server-modal-details">
+                  <span className="server-name">Re:Anime</span>
                   <div className="server-tags">
                     <span className="server-tag">EN</span>
                   </div>
                 </div>
                 <span className="server-status-dot" />
               </button>
+
               <button
                 type="button"
                 className={`server-modal-option ${activeServer === '123' ? 'active' : ''}`}
@@ -2104,11 +2338,12 @@ function Streaming({ onShowAuth }) {
                     onChange={(e) => setReportServer(e.target.value)}
                     className="report-select-input"
                   >
-                    <option value="koto">Koto (EN)</option>
+                    <option value="koto">Koto (EN/Ads)</option>
                     <option value="neko">Neko (EN/FAST)</option>
                     <option value="verse">Verse (EN/FAST)</option>
                     <option value="senshi">Senshi (EN/FAST)</option>
-                    <option value="miko">Miko (EN)</option>
+                    <option value="onsen">Onsen (EN/FAST)</option>
+                    <option value="reanime">Re:Anime (EN)</option>
                     <option value="123">123 (EN)</option>
                     <option value="allanime">AllAnime (EN)</option>
                     <option value="zone">Zone (EN)</option>
