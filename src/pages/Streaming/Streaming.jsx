@@ -11,6 +11,7 @@ import { getSenshiStream } from '../../services/senshiApi';
 import { getOnsenStream } from '../../services/onsenApi';
 import { getAnimeById, getAnimeRelations, getStatusText, getStatusClass } from '../../services/jikanApi';
 import { searchReAnime, getReAnimeStream } from '../../services/reanimeApi';
+import { searchMio, getMioAnime, getMioEpisodes, getMioEpisodeStream } from '../../services/mioApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { addBookmark, removeBookmark, isBookmarked, updateBookmarkCategory, getBookmarks } from '../../services/bookmarkService';
@@ -231,6 +232,116 @@ function findBestReAnimeMatch(animeData, results) {
             if (maxRatio >= 0.7) {
               const score = Math.floor(maxRatio * 50);
               bestScore = Math.max(bestScore, score);
+            }
+          }
+        }
+      }
+    }
+
+    return { result: r, score: bestScore };
+  });
+
+  const validMatches = scoredResults.filter(item => item.score > 0);
+  if (validMatches.length === 0) return null;
+
+  validMatches.sort((a, b) => b.score - a.score);
+  return validMatches[0].result;
+}
+
+function normalizeMioTitle(str) {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .replace(/[^a-z0-9\s\u0e00-\u0e7f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getMioSeasonNumber(titleStr) {
+  const norm = titleStr.toLowerCase();
+  
+  // 1. Check Thai season pattern "ภาค [เลข]" (e.g. ภาค 4, ภาค 1)
+  const thaiMatch = norm.match(/ภาค\s*(\d+)/);
+  if (thaiMatch) {
+    return parseInt(thaiMatch[1]);
+  }
+
+  // 2. Check standard English season patterns
+  const seasonMatch = norm.match(/season\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)/);
+  if (seasonMatch) {
+    const val = seasonMatch[1];
+    if (/\d+/.test(val)) return parseInt(val);
+    const words = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+    return words[val] || null;
+  }
+  const ordinalMatch = norm.match(/(\d+)(st|nd|rd|th)\s+season/);
+  if (ordinalMatch) {
+    return parseInt(ordinalMatch[1]);
+  }
+  const romanMatch = norm.match(/\b(ii|iii|iv|v|vi|vii|viii|ix|x)\b/);
+  if (romanMatch) {
+    const roman = romanMatch[1];
+    const map = { ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10 };
+    return map[roman] || null;
+  }
+  return null;
+}
+
+function cleanMioTitleForBaseComparison(normTitle) {
+  return normTitle
+    .replace(/ภาค\s*\d+/g, '')
+    .replace(/season\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)/g, '')
+    .replace(/(\d+)(st|nd|rd|th)\s+season/g, '')
+    .replace(/\b(ii|iii|iv|v|vi|vii|viii|ix|x)\b/g, '')
+    .replace(/[\u0e00-\u0e7f]/g, '')
+    .replace(/\b(ova|sp|special|ona|movie|completed|etc)\b/g, '')
+    .replace(/\b\d+(-\d+)?\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findBestMioMatch(animeData, results) {
+  if (!animeData || !results || results.length === 0) return null;
+
+  const targetTitles = [
+    animeData.title,
+    animeData.title_english,
+    ...(animeData.title_synonyms || [])
+  ].filter(Boolean);
+
+  const scoredResults = results.map(r => {
+    const resultTitles = [
+      r.title
+    ].filter(Boolean);
+
+    let bestScore = 0;
+
+    for (const t of targetTitles) {
+      const tNorm = normalizeMioTitle(t);
+      const tSeason = getMioSeasonNumber(t) || 1;
+      const tBase = cleanMioTitleForBaseComparison(tNorm);
+
+      for (const rT of resultTitles) {
+        const rNorm = normalizeMioTitle(rT);
+        const rSeason = getMioSeasonNumber(rNorm) || 1;
+        const rBase = cleanMioTitleForBaseComparison(rNorm);
+
+        if (tSeason !== rSeason) continue;
+
+        if (tBase === rBase) {
+          bestScore = Math.max(bestScore, 100);
+        } else if (tBase.includes(rBase) || rBase.includes(tBase)) {
+          const ratio = Math.min(tBase.length, rBase.length) / Math.max(tBase.length, rBase.length);
+          const score = 50 + Math.floor(ratio * 40);
+          bestScore = Math.max(bestScore, score);
+        } else {
+          const tTokens = tBase.split(' ').filter(tk => tk.length > 2);
+          const rTokens = rBase.split(' ').filter(tk => tk.length > 2);
+          if (tTokens.length > 0 && rTokens.length > 0) {
+            const common = tTokens.filter(tk => rTokens.includes(tk));
+            const maxRatio = Math.max(common.length / tTokens.length, common.length / rTokens.length);
+            if (maxRatio >= 0.7) {
+              bestScore = Math.max(bestScore, Math.floor(maxRatio * 50));
             }
           }
         }
@@ -526,6 +637,11 @@ function Streaming({ onShowAuth }) {
   const [reAnimeError, setReAnimeError] = useState(null);
   const [reAnimeEmbedUrl, setReAnimeEmbedUrl] = useState(null);
 
+  const [mioId, setMioId] = useState(null);
+  const [mioLoading, setMioLoading] = useState(false);
+  const [mioError, setMioError] = useState(null);
+  const [mioEpisodes, setMioEpisodes] = useState([]);
+
   const [bookmarked, setBookmarked] = useState(false);
   const [bookmarkCategory, setBookmarkCategory] = useState('');
   const [bookmarkLoading, setBookmarkLoading] = useState(false);
@@ -797,6 +913,47 @@ function Streaming({ onShowAuth }) {
     }
   }
 
+  // Search Mio for matching anime
+  async function searchMioForAnime(animeData, cancelled) {
+    setMioLoading(true);
+    setMioError(null);
+    setMioEpisodes([]);
+
+    const titles = [...new Set([
+      animeData.title,
+      animeData.title_english,
+      animeData.title_japanese,
+    ].filter(Boolean))];
+
+    for (const title of titles) {
+      if (cancelled) return;
+      try {
+        const results = await searchMio(title);
+        const match = findBestMioMatch(animeData, results);
+        if (match && match.id) {
+          setMioId(match.id);
+          const details = await getMioAnime(match.id);
+          if (cancelled) return;
+          if (details && details.seasons && details.seasons.length > 0) {
+            const seasonUrl = details.seasons[0].url;
+            const eps = await getMioEpisodes(seasonUrl);
+            if (cancelled) return;
+            setMioEpisodes(eps || []);
+            setMioLoading(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error(`Mio search/details fetch failed for "${title}":`, err);
+      }
+    }
+
+    if (!cancelled) {
+      setMioError('Anime not found on Mio server.');
+      setMioLoading(false);
+    }
+  }
+
   // ---- Step 1+2: Fetch Jikan + search Anikage IN PARALLEL ----
   useEffect(() => {
     let cancelled = false;
@@ -826,6 +983,9 @@ function Streaming({ onShowAuth }) {
       setReAnimeLoading(false);
       setReAnimeError(null);
       setReAnimeEmbedUrl(null);
+      setMioId(null);
+      setMioError(null);
+      setMioEpisodes([]);
     });
     resolvedForId.current = null;
 
@@ -875,6 +1035,9 @@ function Streaming({ onShowAuth }) {
 
         // Search Re:Anime
         searchReAnimeForAnime(data.data, cancelled);
+
+        // Search Mio
+        searchMioForAnime(data.data, cancelled);
       } catch (err) {
         if (!cancelled) { console.error('Jikan error:', err); setAnimeLoading(false); }
       }
@@ -1039,12 +1202,13 @@ function Streaming({ onShowAuth }) {
           if (!cancelled) setSourceLoading(false);
         }
       } else if (activeServer === 'senshi') {
+        if (!anime) return;
         setSourceLoading(true);
         setSourceError(null);
         setStreamSources([]);
 
         try {
-          const sources = await getSenshiStream(id, currentEpisode);
+          const sources = await getSenshiStream(anime.mal_id, currentEpisode);
           if (cancelled) return;
           if (!sources || sources.length === 0) {
             setSourceError('No streaming source for this episode on Senshi.');
@@ -1057,12 +1221,13 @@ function Streaming({ onShowAuth }) {
           if (!cancelled) setSourceLoading(false);
         }
       } else if (activeServer === 'onsen') {
+        if (!anime) return;
         setSourceLoading(true);
         setSourceError(null);
         setStreamSources([]);
 
         try {
-          const data = await getOnsenStream(id, currentEpisode);
+          const data = await getOnsenStream(anime.mal_id, currentEpisode);
           if (cancelled) return;
           if (!data || !data.stream_url) {
             setSourceError('No streaming source for this episode on Onsen.');
@@ -1107,12 +1272,48 @@ function Streaming({ onShowAuth }) {
         } finally {
           if (!cancelled) setSourceLoading(false);
         }
+      } else if (activeServer === 'mio') {
+        if (mioEpisodes.length === 0) return;
+        setSourceLoading(true);
+        setSourceError(null);
+        setStreamSources([]);
+
+        try {
+          const targetEp = mioEpisodes.find(ep => {
+            const match = ep.title.match(/ตอนที่\s*(\d+(\.\d+)?)/);
+            if (match) {
+              const epNum = parseFloat(match[1]);
+              return epNum === currentEpisode;
+            }
+            return false;
+          });
+
+          if (!targetEp) {
+            setSourceError('No streaming source for this episode on Mio.');
+            return;
+          }
+
+          const proxiedUrl = await getMioEpisodeStream(targetEp.url);
+          if (cancelled) return;
+          if (!proxiedUrl) {
+            setSourceError('No streaming source for this episode on Mio.');
+            return;
+          }
+          setStreamSources([{ quality: 'Mio', streamUrl: proxiedUrl }]);
+        } catch (err) {
+          if (!cancelled) {
+            console.error('Mio stream fetch error:', err);
+            setSourceError('Failed to load stream.');
+          }
+        } finally {
+          if (!cancelled) setSourceLoading(false);
+        }
       }
     };
 
     fetchStream();
     return () => { cancelled = true; };
-  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniZoneId, aniZoneEpisodes, verseId, reAnimeId, currentEpisode, anime, id]);
+  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniZoneId, aniZoneEpisodes, verseId, reAnimeId, mioEpisodes, currentEpisode, anime, id]);
 
   // ---- Related anime (relations from Jikan API, only anime) ----
   useEffect(() => {
@@ -1353,6 +1554,18 @@ function Streaming({ onShowAuth }) {
         return Array.from({ length: Math.min(count, 1500) }, (_, i) => ({ number: i + 1, title: `Episode ${i + 1}` }));
       }
       return [];
+    } else if (activeServer === 'mio') {
+      if (mioEpisodes.length > 0) {
+        return mioEpisodes.map(ep => {
+          const match = ep.title.match(/ตอนที่\s*(\d+(\.\d+)?)/);
+          const num = match ? parseFloat(match[1]) : 0;
+          return { number: num, title: ep.title, img: null };
+        }).filter(ep => ep.number > 0).sort((a, b) => a.number - b.number);
+      }
+      if (count > 0) {
+        return Array.from({ length: Math.min(count, 1500) }, (_, i) => ({ number: i + 1, title: `Episode ${i + 1}` }));
+      }
+      return [];
     } else {
       // For Koto: we always show up to the currently aired count
       return Array.from({ length: Math.max(count, currentEpisode) }, (_, i) => {
@@ -1364,7 +1577,7 @@ function Streaming({ onShowAuth }) {
         };
       });
     }
-  }, [anikageEpisodes, aniZoneEpisodes, totalEpisodeCount, anime, activeServer, currentEpisode]);
+  }, [anikageEpisodes, aniZoneEpisodes, mioEpisodes, totalEpisodeCount, anime, activeServer, currentEpisode]);
 
   const maxEpisode = episodeList.length > 0 ? Math.max(...episodeList.map(ep => ep.number)) : 0;
 
@@ -1372,6 +1585,20 @@ function Streaming({ onShowAuth }) {
     if (activeServer === 'zone') {
       const existing = aniZoneEpisodes.find(ep => ep.number === currentEpisode);
       if (existing) return existing;
+    }
+    if (activeServer === 'mio') {
+      const targetEp = mioEpisodes.find(ep => {
+        const match = ep.title.match(/ตอนที่\s*(\d+(\.\d+)?)/);
+        return match && parseFloat(match[1]) === currentEpisode;
+      });
+      if (targetEp) {
+        return {
+          number: currentEpisode,
+          title: targetEp.title,
+          img: anime?.images?.jpg?.large_image_url || null,
+          description: ''
+        };
+      }
     }
     const existing = anikageEpisodes.find(ep => ep.number === currentEpisode);
     if (existing) return existing;
@@ -1381,7 +1608,7 @@ function Streaming({ onShowAuth }) {
       img: anime?.images?.jpg?.large_image_url || null,
       description: ''
     };
-  }, [anikageEpisodes, aniZoneEpisodes, activeServer, currentEpisode, anime]);
+  }, [anikageEpisodes, aniZoneEpisodes, mioEpisodes, activeServer, currentEpisode, anime]);
 
   // ---- Episode Pagination calculations ----
   const PAGE_SIZE = 100;
@@ -1401,7 +1628,7 @@ function Streaming({ onShowAuth }) {
 
   // ---- Update watch history when anime and episode are playing ----
   useEffect(() => {
-    if (anime && (streamSources.length > 0 || activeServer === 'koto' || activeServer === 'zone' || activeServer === 'verse' || activeServer === 'senshi' || (activeServer === '123' && oneTwoThreeEmbedUrl) || (activeServer === 'reanime' && reAnimeEmbedUrl))) {
+    if (anime && (streamSources.length > 0 || activeServer === 'koto' || activeServer === 'zone' || activeServer === 'verse' || activeServer === 'senshi' || activeServer === 'mio' || (activeServer === '123' && oneTwoThreeEmbedUrl) || (activeServer === 'reanime' && reAnimeEmbedUrl))) {
       updateWatchHistory(anime, currentEpisode, currentEpInfo?.img);
     }
   }, [anime, currentEpisode, streamSources, currentEpInfo, activeServer, oneTwoThreeEmbedUrl, reAnimeEmbedUrl]);
@@ -1658,6 +1885,32 @@ function Streaming({ onShowAuth }) {
                 <div className="streaming-player-error">
                   <AlertCircle size={40} />
                   <span>No streaming source available for Re:Anime.</span>
+                </div>
+              )
+            ) : activeServer === 'mio' ? (
+              mioLoading || sourceLoading || initialProgress === null ? (
+                <div className="streaming-player-loading">
+                  <div className="spinner" />
+                  <span>{mioLoading ? 'Finding anime on Mio...' : `Loading ep ${currentEpisode}...`}</span>
+                </div>
+              ) : mioError || sourceError ? (
+                <div className="streaming-player-error">
+                  <AlertCircle size={40} />
+                  <span>{mioError || sourceError}</span>
+                </div>
+              ) : streamSources.length > 0 ? (
+                <iframe
+                  src={`/embed.html?sources=${encodeURIComponent(JSON.stringify(streamSources))}&poster=${encodeURIComponent(anime?.images?.jpg?.large_image_url || '')}&t=${initialProgress}`}
+                  className="streaming-iframe"
+                  allowFullScreen
+                  scrolling="no"
+                  allow="autoplay; fullscreen; picture-in-picture"
+                  title={`${titleDisplay} - Episode ${currentEpisode} (Mio)`}
+                />
+              ) : (
+                <div className="streaming-player-error">
+                  <AlertCircle size={40} />
+                  <span>No streaming source available for Mio.</span>
                 </div>
               )
             ) : sourceLoading || searchLoading || initialProgress === null ? (
@@ -2243,6 +2496,24 @@ function Streaming({ onShowAuth }) {
 
               <button
                 type="button"
+                className={`server-modal-option ${activeServer === 'mio' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveServer('mio');
+                  setShowServerModal(false);
+                }}
+              >
+                <div className="server-modal-details">
+                  <span className="server-name">Mio</span>
+                  <div className="server-tags">
+                    <span className="server-tag best">Fast</span>
+                    <span className="server-tag">TH</span>
+                  </div>
+                </div>
+                <span className="server-status-dot" />
+              </button>
+
+              <button
+                type="button"
                 className={`server-modal-option ${activeServer === '123' ? 'active' : ''}`}
                 onClick={() => {
                   setActiveServer('123');
@@ -2344,6 +2615,7 @@ function Streaming({ onShowAuth }) {
                     <option value="senshi">Senshi (EN/FAST)</option>
                     <option value="onsen">Onsen (EN/FAST)</option>
                     <option value="reanime">Re:Anime (EN)</option>
+                    <option value="mio">Mio (TH)</option>
                     <option value="123">123 (EN)</option>
                     <option value="allanime">AllAnime (EN)</option>
                     <option value="zone">Zone (EN)</option>

@@ -601,6 +601,54 @@
     padding: var(--space-lg) 0 var(--space-3xl);
     margin-top: -20px;
   }
+
+  /* List cards overrides on tablet/mobile */
+  .home-dual-columns-section {
+    padding: 0 var(--space-md);
+    margin-bottom: var(--space-2xl);
+  }
+
+  .home-dual-title {
+    font-size: var(--font-lg);
+    margin-bottom: var(--space-md);
+  }
+
+  .home-list-card {
+    padding: var(--space-xs) var(--space-sm);
+    gap: var(--space-sm);
+    height: 72px;
+  }
+
+  .home-list-rank {
+    font-size: var(--font-sm);
+    min-width: 24px;
+  }
+
+  .home-list-img-wrapper {
+    width: 38px;
+    height: 50px;
+  }
+
+  .home-list-title {
+    font-size: var(--font-xs);
+  }
+
+  .home-list-meta {
+    font-size: var(--font-xxs);
+    gap: 3px;
+  }
+
+  .home-list-right {
+    gap: 1px;
+  }
+
+  .home-list-type {
+    font-size: var(--font-xxs);
+  }
+
+  .home-list-episodes {
+    font-size: var(--font-xxs);
+  }
 }
 
 /* ============================================
@@ -642,6 +690,39 @@
   .status-badge {
     font-size: 0.6rem;
   }
+
+  /* List cards overrides on small mobile */
+  .home-dual-columns-section {
+    padding: 0 var(--space-sm);
+  }
+
+  .home-list-card {
+    padding: var(--space-xs) var(--space-xs);
+    gap: var(--space-xs);
+    height: 64px;
+  }
+
+  .home-list-rank {
+    font-size: var(--font-xs);
+    min-width: 20px;
+  }
+
+  .home-list-img-wrapper {
+    width: 32px;
+    height: 44px;
+  }
+
+  .home-list-meta {
+    font-size: 10px;
+  }
+  
+  .home-list-type {
+    font-size: 9px;
+  }
+  
+  .home-list-episodes {
+    font-size: 8px;
+  }
 }
 
 /* ============================================
@@ -666,6 +747,7 @@
 .home-dual-column {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .home-dual-title {

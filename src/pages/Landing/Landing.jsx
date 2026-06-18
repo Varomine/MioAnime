@@ -10,7 +10,6 @@ export default function Landing() {
   const [trending, setTrending] = useState([]);
   const [loading, setLoading] = useState(true);
   const [randomLoading, setRandomLoading] = useState(false);
-
   // Fetch a randomized pool of popular anime to populate the moving cards background grid
   useEffect(() => {
     let active = true;

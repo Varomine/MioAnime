@@ -54,7 +54,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                 className={`server-custom-dropdown-btn ${serverDropdownOpen ? 'active' : ''}`}
                 onClick={() => setServerDropdownOpen(prev => !prev)}
               >
-                <span>{defaultServer === 'neko' ? 'Neko' : defaultServer === 'miko' ? 'Miko' : defaultServer === 'koto' ? 'Koto' : defaultServer === '123' ? '123' : defaultServer === 'allanime' ? 'AllAnime' : defaultServer === 'hanime' ? 'HAnime' : defaultServer === 'verse' ? 'Verse' : defaultServer === 'senshi' ? 'Senshi' : defaultServer === 'onsen' ? 'Onsen' : defaultServer === 'reanime' ? 'Re:Anime' : 'Zone'}</span>
+                <span>{defaultServer === 'neko' ? 'Neko' : defaultServer === 'miko' ? 'Miko' : defaultServer === 'koto' ? 'Koto' : defaultServer === '123' ? '123' : defaultServer === 'allanime' ? 'AllAnime' : defaultServer === 'hanime' ? 'HAnime' : defaultServer === 'verse' ? 'Verse' : defaultServer === 'senshi' ? 'Senshi' : defaultServer === 'onsen' ? 'Onsen' : defaultServer === 'reanime' ? 'Re:Anime' : defaultServer === 'mio' ? 'Mio' : 'Zone'}</span>
                 <ChevronDown size={16} className={`server-custom-dropdown-chevron ${serverDropdownOpen ? 'rotated' : ''}`} />
               </button>
 
@@ -142,6 +142,20 @@ export default function SettingsModal({ isOpen, onClose }) {
                       {defaultServer === 'reanime' && <Check size={10} strokeWidth={3} />}
                     </span>
                     <span>Re:Anime <span className="server-dropdown-tag">EN</span></span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`server-custom-dropdown-option ${defaultServer === 'mio' ? 'selected' : ''}`}
+                    onClick={() => {
+                      setDefaultServer('mio');
+                      setServerDropdownOpen(false);
+                    }}
+                  >
+                    <span className="server-option-check-box">
+                      {defaultServer === 'mio' && <Check size={10} strokeWidth={3} />}
+                    </span>
+                    <span>Mio <span className="server-dropdown-tag best">Fast</span><span className="server-dropdown-tag">TH</span></span>
                   </button>
 
 
