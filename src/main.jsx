@@ -7,6 +7,7 @@ import App from './App';
 import './index.css';
 
 if (typeof window !== 'undefined') {
+  /*
   document.addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('keydown', e => {
     // Block F12 and all extended function keys (F13-F24, which includes F18)
@@ -41,6 +42,7 @@ if (typeof window !== 'undefined') {
     console.log(element);
   };
   setInterval(detectDevTools, 1000);
+  */
 }
 
 createRoot(document.getElementById('root')).render(

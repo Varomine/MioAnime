@@ -221,8 +221,13 @@ export default function Navbar({ onShowAuth }) {
             <form className="nav-search" onSubmit={handleSearchSubmit}>
               <input type="text" placeholder="Search anime..." value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => { if (searchQuery.trim().length >= 2) setShowSearchResults(true); }} />
-              <Search size={16} className="nav-search-icon" />
+                onFocus={() => { if (searchQuery.trim().length >= 2) setShowSearchResults(true); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSearchSubmit(e);
+                  }
+                }} />
+              <Search size={16} className="nav-search-icon" onClick={handleSearchSubmit} style={{ cursor: 'pointer' }} />
             </form>
 
             {showSearchResults && (
@@ -378,8 +383,13 @@ export default function Navbar({ onShowAuth }) {
         ))}
         <form className="nav-search" onSubmit={handleSearchSubmit}>
           <input type="text" placeholder="Search anime..." value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)} />
-          <Search size={16} className="nav-search-icon" />
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleSearchSubmit(e);
+              }
+            }} />
+          <Search size={16} className="nav-search-icon" onClick={handleSearchSubmit} style={{ cursor: 'pointer' }} />
         </form>
       </div>
 

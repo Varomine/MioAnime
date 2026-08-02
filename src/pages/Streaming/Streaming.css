@@ -1797,4 +1797,121 @@
   box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
 }
 
+/* Premium Vertical Episode Selector */
+.streaming-episodes-list-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: none; /* Hide scrollbar in Firefox */
+  -ms-overflow-style: none; /* Hide scrollbar in IE/Edge */
+}
+
+/* Hide scrollbar in Chrome, Safari, and Opera */
+.streaming-episodes-list-vertical::-webkit-scrollbar {
+  display: none;
+}
+
+.streaming-episode-row {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  padding: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  width: 100%;
+}
+
+.streaming-episode-row:hover {
+  border-color: var(--accent-gold);
+  background: var(--accent-gold-dim);
+}
+
+.streaming-episode-row.active {
+  border-color: var(--accent-gold);
+  background: rgba(228, 168, 93, 0.12); /* Semi-transparent gold */
+}
+
+.streaming-episode-row-img-container {
+  position: relative;
+  width: 96px;
+  aspect-ratio: 16/9;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #000;
+  flex-shrink: 0;
+}
+
+.streaming-episode-row-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--transition-base);
+}
+
+.streaming-episode-row:hover .streaming-episode-row-img {
+  transform: scale(1.05);
+}
+
+.streaming-episode-row-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  background: linear-gradient(135deg, var(--bg-elevated), var(--bg-surface));
+}
+
+.streaming-episode-row-playing {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(1px);
+}
+
+.streaming-episode-row-playing span {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent-gold);
+  letter-spacing: 1.5px;
+  animation: pulse 1.8s infinite ease-in-out;
+}
+
+.streaming-episode-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.streaming-episode-row-number {
+  font-size: var(--font-xs);
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+.streaming-episode-row-title {
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.streaming-episode-row.active .streaming-episode-row-title {
+  color: var(--accent-gold);
+}
+
 

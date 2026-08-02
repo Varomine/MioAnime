@@ -628,9 +628,9 @@ function Streaming({ onShowAuth }) {
   const [aniZoneEpisodes, setAniZoneEpisodes] = useState([]);
   const [aniZoneEpisodesLoading, setAniZoneEpisodesLoading] = useState(false);
 
-  const [verseId, setVerseId] = useState(null);
-  const [verseLoading, setVerseLoading] = useState(false);
-  const [verseError, setVerseError] = useState(null);
+  const [aniZipEpisodes, setAniZipEpisodes] = useState([]);
+  const [aniZipLoading, setAniZipLoading] = useState(false);
+  const [anilistId, setAnilistId] = useState(null);
 
   const [reAnimeId, setReAnimeId] = useState(null);
   const [reAnimeLoading, setReAnimeLoading] = useState(false);
@@ -850,35 +850,47 @@ function Streaming({ onShowAuth }) {
     }
   }
 
-  // Search Verse for matching anime
-  async function searchVerseForAnime(animeData, cancelled) {
-    setVerseLoading(true);
-    setVerseError(null);
-
-    const titles = [...new Set([
-      animeData.title_english,
-      animeData.title,
-      animeData.title_japanese,
-    ].filter(Boolean))];
-
-    for (const title of titles) {
+  // Fetch AniZip mappings for episode screenshots and titles
+  async function fetchAniZip(malId, cancelled) {
+    setAniZipLoading(true);
+    try {
+      const res = await fetch(`https://api.ani.zip/mappings?mal_id=${malId}`);
       if (cancelled) return;
-      try {
-        const items = await searchVerse(title);
-        const match = findBestVerseMatch(animeData, items);
-        if (match) {
-          setVerseId(match.slug || match.id);
-          setVerseLoading(false);
-          return;
+      if (res.ok) {
+        const data = await res.json();
+        const idAnilist = data?.mappings?.anilist_id;
+        setAnilistId(idAnilist);
+        
+        if (data.episodes) {
+          const parsed = Object.values(data.episodes)
+            .filter(ep => {
+              const num = parseInt(ep.episode);
+              if (isNaN(num)) return false;
+              if (ep.airdate) {
+                const now = new Date();
+                const epDate = new Date(ep.airdate);
+                if (epDate > now) return false;
+              }
+              return true;
+            })
+            .map(ep => {
+              const num = parseInt(ep.episode);
+              const title = ep.title?.en || ep.title?.ja || ep.title?.['x-jat'] || `Episode ${num}`;
+              return {
+                number: num,
+                title: title,
+                img: ep.image || null,
+                description: ep.overview || ep.summary || ''
+              };
+            })
+            .sort((a, b) => a.number - b.number);
+          setAniZipEpisodes(parsed);
         }
-      } catch (err) {
-        console.error(`Verse search failed for "${title}":`, err);
       }
-    }
-
-    if (!cancelled) {
-      setVerseError('Anime not found on Verse server.');
-      setVerseLoading(false);
+    } catch (err) {
+      console.error('api.ani.zip fetch failed:', err);
+    } finally {
+      if (!cancelled) setAniZipLoading(false);
     }
   }
 
@@ -977,8 +989,9 @@ function Streaming({ onShowAuth }) {
       setAniZoneError(null);
       setAniZoneSubtitles([]);
       setAniZoneEpisodes([]);
-      setVerseId(null);
-      setVerseError(null);
+      setAniZipEpisodes([]);
+      setAniZipLoading(false);
+      setAnilistId(null);
       setReAnimeId(null);
       setReAnimeLoading(false);
       setReAnimeError(null);
@@ -988,7 +1001,7 @@ function Streaming({ onShowAuth }) {
       setMioEpisodes([]);
     });
     resolvedForId.current = null;
-
+ 
     // Check slug cache
     if (malId === 5042) {
       slugCache.set(5042, { slug: '8XzUtDNZYp', totalEpisodes: 12 });
@@ -1005,7 +1018,7 @@ function Streaming({ onShowAuth }) {
         setTotalEpisodeCount(cached.totalEpisodes || 0);
       });
     }
-
+ 
     // Fetch Jikan anime data
     const fetchAnime = async () => {
       try {
@@ -1013,29 +1026,29 @@ function Streaming({ onShowAuth }) {
         if (cancelled) return;
         setAnime(data.data);
         setAnimeLoading(false);
-
+ 
         // Only search Anikage if not cached
         if (malId === 5042) {
           // Already overridden
         } else if (!slugCache.has(malId)) {
           searchAnikageForAnime(data.data, malId, cancelled);
         }
-
+ 
         // Search 123Anime
         searchOneTwoThreeForAnime(data.data, cancelled);
-
+ 
         // Search AllAnime
         searchAllAnimeForAnime(data.data, cancelled);
-
+ 
         // Search AniZone
         searchAniZoneForAnime(data.data, cancelled);
-
-        // Search Verse
-        searchVerseForAnime(data.data, cancelled);
-
+ 
+        // Fetch AniZip mappings
+        fetchAniZip(malId, cancelled);
+ 
         // Search Re:Anime
         searchReAnimeForAnime(data.data, cancelled);
-
+ 
         // Search Mio
         searchMioForAnime(data.data, cancelled);
       } catch (err) {
@@ -1182,25 +1195,11 @@ function Streaming({ onShowAuth }) {
         } finally {
           if (!cancelled) setSourceLoading(false);
         }
-      } else if (activeServer === 'verse') {
-        if (!verseId) return;
-        setSourceLoading(true);
+      } else if (activeServer === 'nexus') {
+        // Nexus uses an iframe directly based on anilistId. We don't fetch any stream sources.
+        setSourceLoading(false);
         setSourceError(null);
         setStreamSources([]);
-
-        try {
-          const streamUrl = await getVerseStream(verseId, currentEpisode);
-          if (cancelled) return;
-          if (!streamUrl) {
-            setSourceError('No streaming source for this episode on Verse.');
-            return;
-          }
-          setStreamSources([{ quality: 'Verse', streamUrl }]);
-        } catch (err) {
-          if (!cancelled) { console.error('Verse stream fetch error:', err); setSourceError('Failed to load stream.'); }
-        } finally {
-          if (!cancelled) setSourceLoading(false);
-        }
       } else if (activeServer === 'senshi') {
         if (!anime) return;
         setSourceLoading(true);
@@ -1313,7 +1312,7 @@ function Streaming({ onShowAuth }) {
 
     fetchStream();
     return () => { cancelled = true; };
-  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniZoneId, aniZoneEpisodes, verseId, reAnimeId, mioEpisodes, currentEpisode, anime, id]);
+  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniZoneId, aniZoneEpisodes, anilistId, reAnimeId, mioEpisodes, currentEpisode, anime, id]);
 
   // ---- Related anime (relations from Jikan API, only anime) ----
   useEffect(() => {
@@ -1518,6 +1517,9 @@ function Streaming({ onShowAuth }) {
 
   // ---- Episode list (from Anikage or generated) ----
   const episodeList = useMemo(() => {
+    if (aniZipEpisodes.length > 0) {
+      return aniZipEpisodes;
+    }
     // Determine the count of episodes that have actually aired
     let count = 0;
     if (anikageEpisodes.length > 0) {
@@ -1577,11 +1579,14 @@ function Streaming({ onShowAuth }) {
         };
       });
     }
-  }, [anikageEpisodes, aniZoneEpisodes, mioEpisodes, totalEpisodeCount, anime, activeServer, currentEpisode]);
+  }, [aniZipEpisodes, anikageEpisodes, aniZoneEpisodes, mioEpisodes, totalEpisodeCount, anime, activeServer, currentEpisode]);
 
   const maxEpisode = episodeList.length > 0 ? Math.max(...episodeList.map(ep => ep.number)) : 0;
 
   const currentEpInfo = useMemo(() => {
+    const fromList = episodeList.find(ep => ep.number === currentEpisode);
+    if (fromList) return fromList;
+
     if (activeServer === 'zone') {
       const existing = aniZoneEpisodes.find(ep => ep.number === currentEpisode);
       if (existing) return existing;
@@ -1608,7 +1613,7 @@ function Streaming({ onShowAuth }) {
       img: anime?.images?.jpg?.large_image_url || null,
       description: ''
     };
-  }, [anikageEpisodes, aniZoneEpisodes, mioEpisodes, activeServer, currentEpisode, anime]);
+  }, [episodeList, anikageEpisodes, aniZoneEpisodes, mioEpisodes, activeServer, currentEpisode, anime]);
 
   // ---- Episode Pagination calculations ----
   const PAGE_SIZE = 100;
@@ -1628,7 +1633,7 @@ function Streaming({ onShowAuth }) {
 
   // ---- Update watch history when anime and episode are playing ----
   useEffect(() => {
-    if (anime && (streamSources.length > 0 || activeServer === 'koto' || activeServer === 'zone' || activeServer === 'verse' || activeServer === 'senshi' || activeServer === 'mio' || (activeServer === '123' && oneTwoThreeEmbedUrl) || (activeServer === 'reanime' && reAnimeEmbedUrl))) {
+    if (anime && (streamSources.length > 0 || activeServer === 'koto' || activeServer === 'zone' || activeServer === 'nexus' || activeServer === 'senshi' || activeServer === 'mio' || (activeServer === '123' && oneTwoThreeEmbedUrl) || (activeServer === 'reanime' && reAnimeEmbedUrl))) {
       updateWatchHistory(anime, currentEpisode, currentEpInfo?.img);
     }
   }, [anime, currentEpisode, streamSources, currentEpInfo, activeServer, oneTwoThreeEmbedUrl, reAnimeEmbedUrl]);
@@ -1808,31 +1813,26 @@ function Streaming({ onShowAuth }) {
                   <span>No streaming source available for Zone.</span>
                 </div>
               )
-            ) : activeServer === 'verse' ? (
-              verseLoading || sourceLoading || initialProgress === null ? (
+            ) : activeServer === 'nexus' ? (
+              aniZipLoading || initialProgress === null ? (
                 <div className="streaming-player-loading">
                   <div className="spinner" />
-                  <span>{verseLoading ? 'Finding anime on Verse...' : `Loading ep ${currentEpisode}...`}</span>
+                  <span>Resolving AniList ID for Nexus...</span>
                 </div>
-              ) : verseError || sourceError ? (
+              ) : !anilistId ? (
                 <div className="streaming-player-error">
                   <AlertCircle size={40} />
-                  <span>{verseError || sourceError}</span>
+                  <span>Nexus requires a valid AniList ID which was not found for this MAL ID.</span>
                 </div>
-              ) : streamSources.length > 0 ? (
+              ) : (
                 <iframe
-                  src={`/embed.html?sources=${encodeURIComponent(JSON.stringify(streamSources))}&poster=${encodeURIComponent(anime?.images?.jpg?.large_image_url || '')}&t=${initialProgress}`}
+                  src={`https://anime-nexus-blue.vercel.app/anime/${anilistId}/${currentEpisode}/sub`}
                   className="streaming-iframe"
                   allowFullScreen
                   scrolling="no"
                   allow="autoplay; fullscreen; picture-in-picture"
-                  title={`${titleDisplay} - Episode ${currentEpisode} (Verse)`}
+                  title={`${titleDisplay} - Episode ${currentEpisode} (Nexus)`}
                 />
-              ) : (
-                <div className="streaming-player-error">
-                  <AlertCircle size={40} />
-                  <span>No streaming source available for Verse.</span>
-                </div>
               )
             ) : activeServer === 'onsen' ? (
               sourceLoading || initialProgress === null ? (
@@ -2330,13 +2330,31 @@ function Streaming({ onShowAuth }) {
                       </button>
                     </div>
                   )}
-                  <div className="streaming-episodes-grid">
+                  <div className="streaming-episodes-list-vertical">
                     {paginatedEpisodes.map(ep => (
                       <button key={ep.number}
-                        className={`streaming-episode-btn ${ep.number === currentEpisode ? 'active' : ''}`}
+                        className={`streaming-episode-row ${ep.number === currentEpisode ? 'active' : ''}`}
                         onClick={() => handleEpisodeSelect(ep.number)}
-                        title={ep.title || `Episode ${ep.number}`}
-                      >{ep.number}</button>
+                      >
+                        <div className="streaming-episode-row-img-container">
+                          {ep.img ? (
+                            <img src={ep.img} alt={ep.title} className="streaming-episode-row-img" loading="lazy" />
+                          ) : (
+                            <div className="streaming-episode-row-placeholder">
+                              <Play size={16} />
+                            </div>
+                          )}
+                          {ep.number === currentEpisode && (
+                            <div className="streaming-episode-row-playing">
+                              <span>PLAYING</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="streaming-episode-row-info">
+                          <span className="streaming-episode-row-number">Episode {ep.number}</span>
+                          <span className="streaming-episode-row-title">{ep.title || `Episode ${ep.number}`}</span>
+                        </div>
+                      </button>
                     ))}
                   </div>
                 </>
@@ -2427,14 +2445,14 @@ function Streaming({ onShowAuth }) {
               </button>
               <button
                 type="button"
-                className={`server-modal-option ${activeServer === 'verse' ? 'active' : ''}`}
+                className={`server-modal-option ${activeServer === 'nexus' ? 'active' : ''}`}
                 onClick={() => {
-                  setActiveServer('verse');
+                  setActiveServer('nexus');
                   setShowServerModal(false);
                 }}
               >
                 <div className="server-modal-details">
-                  <span className="server-name">Verse</span>
+                  <span className="server-name">Nexus</span>
                   <div className="server-tags">
                     <span className="server-tag best">Fast</span>
                     <span className="server-tag">EN</span>

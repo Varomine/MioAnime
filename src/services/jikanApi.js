@@ -1,8 +1,4 @@
-// Jikan API v4 Service
-// Base URL: https://api.jikan.moe/v4
-// Rate limit: 3 req/sec, 60 req/min
-
-const BASE_URL = 'https://api.jikan.moe/v4';
+const BASE_URL = 'https://api.tenrai.org/v1';
 
 // Simple rate limiter - queue requests to avoid hitting limits
 const requestQueue = [];
