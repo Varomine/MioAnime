@@ -10,7 +10,7 @@ import { searchVerse, getVerseStream } from '../../services/verseApi';
 import { getSenshiStream } from '../../services/senshiApi';
 import { getOnsenStream } from '../../services/onsenApi';
 import { getAnimeById, getAnimeRelations, getStatusText, getStatusClass } from '../../services/jikanApi';
-import { searchReAnime, getReAnimeStream } from '../../services/reanimeApi';
+
 import { searchMio, getMioAnime, getMioEpisodes, getMioEpisodeStream } from '../../services/mioApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -184,69 +184,7 @@ function findBestVerseMatch(animeData, items) {
   return validMatches[0].result;
 }
 
-function findBestReAnimeMatch(animeData, results) {
-  if (!animeData || !results || results.length === 0) return null;
 
-  const targetTitles = [
-    animeData.title,
-    animeData.title_english,
-    ...(animeData.title_synonyms || [])
-  ].filter(Boolean);
-
-  const scoredResults = results.map(r => {
-    const resultTitles = [
-      r.title?.english,
-      r.title?.romaji,
-      r.title?.user_preferred,
-      typeof r.title === 'string' ? r.title : null
-    ].filter(Boolean);
-
-    let bestScore = 0;
-
-    for (const t of targetTitles) {
-      const tNorm = normalizeTitle(t);
-      const tSeason = getSeasonNumber(t) || 1;
-      const tBase = cleanTitleForBaseComparison(tNorm);
-
-      for (const rT of resultTitles) {
-        const rNorm = normalizeTitle(rT);
-        const rSeason = getSeasonNumber(rNorm) || 1;
-        const rBase = cleanTitleForBaseComparison(rNorm);
-
-        if (tSeason !== rSeason) continue;
-
-        if (tBase === rBase) {
-          bestScore = Math.max(bestScore, 100);
-        } else if (tBase.includes(rBase) || rBase.includes(tBase)) {
-          const ratio = Math.min(tBase.length, rBase.length) / Math.max(tBase.length, rBase.length);
-          const score = 50 + Math.floor(ratio * 40);
-          bestScore = Math.max(bestScore, score);
-        } else {
-          const tTokens = tBase.split(' ').filter(tk => tk.length > 2);
-          const rTokens = rBase.split(' ').filter(tk => tk.length > 2);
-          if (tTokens.length > 0 && rTokens.length > 0) {
-            const common = tTokens.filter(tk => rTokens.includes(tk));
-            const ratioTarget = common.length / tTokens.length;
-            const ratioResult = common.length / rTokens.length;
-            const maxRatio = Math.max(ratioTarget, ratioResult);
-            if (maxRatio >= 0.7) {
-              const score = Math.floor(maxRatio * 50);
-              bestScore = Math.max(bestScore, score);
-            }
-          }
-        }
-      }
-    }
-
-    return { result: r, score: bestScore };
-  });
-
-  const validMatches = scoredResults.filter(item => item.score > 0);
-  if (validMatches.length === 0) return null;
-
-  validMatches.sort((a, b) => b.score - a.score);
-  return validMatches[0].result;
-}
 
 function normalizeMioTitle(str) {
   if (!str) return '';
@@ -632,10 +570,7 @@ function Streaming({ onShowAuth }) {
   const [aniZipLoading, setAniZipLoading] = useState(false);
   const [anilistId, setAnilistId] = useState(null);
 
-  const [reAnimeId, setReAnimeId] = useState(null);
-  const [reAnimeLoading, setReAnimeLoading] = useState(false);
-  const [reAnimeError, setReAnimeError] = useState(null);
-  const [reAnimeEmbedUrl, setReAnimeEmbedUrl] = useState(null);
+
 
   const [mioId, setMioId] = useState(null);
   const [mioLoading, setMioLoading] = useState(false);
@@ -894,36 +829,7 @@ function Streaming({ onShowAuth }) {
     }
   }
 
-  // Search Re:Anime for matching anime
-  async function searchReAnimeForAnime(animeData, cancelled) {
-    setReAnimeLoading(true);
-    setReAnimeError(null);
 
-    const titles = [...new Set([
-      animeData.title,
-      animeData.title_japanese,
-    ].filter(Boolean))];
-
-    for (const title of titles) {
-      if (cancelled) return;
-      try {
-        const items = await searchReAnime(title);
-        const match = findBestReAnimeMatch(animeData, items);
-        if (match && match.anime_id) {
-          setReAnimeId(match.anime_id);
-          setReAnimeLoading(false);
-          return;
-        }
-      } catch (err) {
-        console.error(`Re:Anime search failed for "${title}":`, err);
-      }
-    }
-
-    if (!cancelled) {
-      setReAnimeError('Anime not found on Re:Anime server.');
-      setReAnimeLoading(false);
-    }
-  }
 
   // Search Mio for matching anime
   async function searchMioForAnime(animeData, cancelled) {
@@ -992,16 +898,12 @@ function Streaming({ onShowAuth }) {
       setAniZipEpisodes([]);
       setAniZipLoading(false);
       setAnilistId(null);
-      setReAnimeId(null);
-      setReAnimeLoading(false);
-      setReAnimeError(null);
-      setReAnimeEmbedUrl(null);
       setMioId(null);
       setMioError(null);
       setMioEpisodes([]);
     });
     resolvedForId.current = null;
- 
+  
     // Check slug cache
     if (malId === 5042) {
       slugCache.set(5042, { slug: '8XzUtDNZYp', totalEpisodes: 12 });
@@ -1018,7 +920,7 @@ function Streaming({ onShowAuth }) {
         setTotalEpisodeCount(cached.totalEpisodes || 0);
       });
     }
- 
+  
     // Fetch Jikan anime data
     const fetchAnime = async () => {
       try {
@@ -1026,29 +928,26 @@ function Streaming({ onShowAuth }) {
         if (cancelled) return;
         setAnime(data.data);
         setAnimeLoading(false);
- 
+  
         // Only search Anikage if not cached
         if (malId === 5042) {
           // Already overridden
         } else if (!slugCache.has(malId)) {
           searchAnikageForAnime(data.data, malId, cancelled);
         }
- 
+  
         // Search 123Anime
         searchOneTwoThreeForAnime(data.data, cancelled);
- 
+  
         // Search AllAnime
         searchAllAnimeForAnime(data.data, cancelled);
- 
+  
         // Search AniZone
         searchAniZoneForAnime(data.data, cancelled);
- 
+  
         // Fetch AniZip mappings
         fetchAniZip(malId, cancelled);
- 
-        // Search Re:Anime
-        searchReAnimeForAnime(data.data, cancelled);
- 
+  
         // Search Mio
         searchMioForAnime(data.data, cancelled);
       } catch (err) {
@@ -1252,25 +1151,10 @@ function Streaming({ onShowAuth }) {
           if (!cancelled) setSourceLoading(false);
         }
       } else if (activeServer === 'reanime') {
-        if (!reAnimeId) return;
-        setSourceLoading(true);
+        // 4animo uses an iframe directly based on malId. We don't fetch any stream sources.
+        setSourceLoading(false);
         setSourceError(null);
-        setReAnimeEmbedUrl(null);
         setStreamSources([]);
-
-        try {
-          const embedUrl = await getReAnimeStream(reAnimeId, currentEpisode);
-          if (cancelled) return;
-          if (!embedUrl) {
-            setSourceError('No streaming source for this episode on Re:Anime.');
-            return;
-          }
-          setReAnimeEmbedUrl(embedUrl);
-        } catch (err) {
-          if (!cancelled) { console.error('Re:Anime stream fetch error:', err); setSourceError('Failed to load stream.'); }
-        } finally {
-          if (!cancelled) setSourceLoading(false);
-        }
       } else if (activeServer === 'mio') {
         if (mioEpisodes.length === 0) return;
         setSourceLoading(true);
@@ -1312,7 +1196,7 @@ function Streaming({ onShowAuth }) {
 
     fetchStream();
     return () => { cancelled = true; };
-  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniZoneId, aniZoneEpisodes, anilistId, reAnimeId, mioEpisodes, currentEpisode, anime, id]);
+  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniZoneId, aniZoneEpisodes, anilistId, mioEpisodes, currentEpisode, anime, id]);
 
   // ---- Related anime (relations from Jikan API, only anime) ----
   useEffect(() => {
@@ -1633,10 +1517,10 @@ function Streaming({ onShowAuth }) {
 
   // ---- Update watch history when anime and episode are playing ----
   useEffect(() => {
-    if (anime && (streamSources.length > 0 || activeServer === 'koto' || activeServer === 'zone' || activeServer === 'nexus' || activeServer === 'senshi' || activeServer === 'mio' || (activeServer === '123' && oneTwoThreeEmbedUrl) || (activeServer === 'reanime' && reAnimeEmbedUrl))) {
+    if (anime && (streamSources.length > 0 || activeServer === 'koto' || activeServer === 'zone' || activeServer === 'nexus' || activeServer === 'reanime' || activeServer === 'senshi' || activeServer === 'mio' || (activeServer === '123' && oneTwoThreeEmbedUrl))) {
       updateWatchHistory(anime, currentEpisode, currentEpInfo?.img);
     }
-  }, [anime, currentEpisode, streamSources, currentEpInfo, activeServer, oneTwoThreeEmbedUrl, reAnimeEmbedUrl]);
+  }, [anime, currentEpisode, streamSources, currentEpInfo, activeServer, oneTwoThreeEmbedUrl]);
 
   // ---- Episode nav handlers ----
   const handleEpisodeSelect = useCallback((n) => { if (n !== currentEpisode) setCurrentEpisode(n); }, [currentEpisode]);
@@ -1861,31 +1745,21 @@ function Streaming({ onShowAuth }) {
                 </div>
               )
             ) : activeServer === 'reanime' ? (
-              reAnimeLoading || sourceLoading || initialProgress === null ? (
+              animeLoading || initialProgress === null ? (
                 <div className="streaming-player-loading">
                   <div className="spinner" />
-                  <span>{reAnimeLoading ? 'Finding anime on Re:Anime...' : `Loading ep ${currentEpisode}...`}</span>
+                  <span>{`Loading ep ${currentEpisode} on 4animo...`}</span>
                 </div>
-              ) : reAnimeError || sourceError ? (
-                <div className="streaming-player-error">
-                  <AlertCircle size={40} />
-                  <span>{reAnimeError || sourceError}</span>
-                </div>
-              ) : reAnimeEmbedUrl ? (
+              ) : (
                 <iframe
-                  src={reAnimeEmbedUrl}
+                  src={`https://cdn.4animo.xyz/embed/hd-1/mal/${id}/${currentEpisode}/sub?k=1`}
                   className="streaming-iframe"
                   allowFullScreen
                   scrolling="no"
                   allow="autoplay; fullscreen; picture-in-picture"
-                  sandbox="allow-scripts allow-same-origin"
-                  title={`${titleDisplay} - Episode ${currentEpisode} (Re:Anime)`}
+                  sandbox="allow-same-origin allow-scripts"
+                  title={`${titleDisplay} - Episode ${currentEpisode} (4animo)`}
                 />
-              ) : (
-                <div className="streaming-player-error">
-                  <AlertCircle size={40} />
-                  <span>No streaming source available for Re:Anime.</span>
-                </div>
               )
             ) : activeServer === 'mio' ? (
               mioLoading || sourceLoading || initialProgress === null ? (
@@ -2504,8 +2378,9 @@ function Streaming({ onShowAuth }) {
                 }}
               >
                 <div className="server-modal-details">
-                  <span className="server-name">Re:Anime</span>
+                  <span className="server-name">4animo</span>
                   <div className="server-tags">
+                    <span className="server-tag best">Fast</span>
                     <span className="server-tag">EN</span>
                   </div>
                 </div>
@@ -2629,10 +2504,10 @@ function Streaming({ onShowAuth }) {
                   >
                     <option value="koto">Koto (EN/Ads)</option>
                     <option value="neko">Neko (EN/FAST)</option>
-                    <option value="verse">Verse (EN/FAST)</option>
+                    <option value="nexus">Nexus (EN/FAST)</option>
                     <option value="senshi">Senshi (EN/FAST)</option>
                     <option value="onsen">Onsen (EN/FAST)</option>
-                    <option value="reanime">Re:Anime (EN)</option>
+                    <option value="reanime">4animo (EN/FAST)</option>
                     <option value="mio">Mio (TH)</option>
                     <option value="123">123 (EN)</option>
                     <option value="allanime">AllAnime (EN)</option>
