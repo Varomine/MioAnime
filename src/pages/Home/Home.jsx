@@ -630,7 +630,7 @@ function Home({ onShowAuth }) {
           title="Popular This Season"
           anime={seasonal}
           loading={seasonalLoading}
-          viewAllLink="/browse?year=2026&season=spring"
+          viewAllLink="/browse?year=2026&season=summer"
           onBookmark={handleCardBookmark}
           bookmarkedIds={userBookmarks}
         />
