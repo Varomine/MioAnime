@@ -8,7 +8,7 @@ import { getHAnimeStreams } from '../../services/hanimeApi';
 import { searchAniZone, getAniZoneEpisodes, getAniZoneStream } from '../../services/anizoneApi';
 import { searchVerse, getVerseStream } from '../../services/verseApi';
 import { getSenshiStream } from '../../services/senshiApi';
-import { getOnsenStream } from '../../services/onsenApi';
+import { getReanimeEpisodes } from '../../services/reanimeApi';
 import { getAnimeById, getAnimeRelations, getStatusText, getStatusClass } from '../../services/jikanApi';
 
 import { searchMio, getMioAnime, getMioEpisodes, getMioEpisodeStream } from '../../services/mioApi';
@@ -570,6 +570,10 @@ function Streaming({ onShowAuth }) {
   const [aniZipLoading, setAniZipLoading] = useState(false);
   const [anilistId, setAnilistId] = useState(null);
 
+  const [reanimeEpisodes, setReanimeEpisodes] = useState([]);
+  const [reanimeLoading, setReanimeLoading] = useState(false);
+  const [reanimeError, setReanimeError] = useState(null);
+
 
 
   const [mioId, setMioId] = useState(null);
@@ -829,6 +833,37 @@ function Streaming({ onShowAuth }) {
     }
   }
 
+  // ---- Fetch Reanime episodes when anilistId is resolved ----
+  useEffect(() => {
+    if (!anilistId) {
+      setReanimeEpisodes([]);
+      return;
+    }
+    let cancelled = false;
+    async function fetchReanime() {
+      setReanimeLoading(true);
+      setReanimeError(null);
+      try {
+        const data = await getReanimeEpisodes(anilistId);
+        if (cancelled) return;
+        if (data && data.success && data.episodes) {
+          setReanimeEpisodes(data.episodes);
+        } else {
+          setReanimeError('No streaming episodes found on Reanime.');
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Reanime fetch error:', err);
+          setReanimeError('Failed to fetch streaming episodes from Reanime.');
+        }
+      } finally {
+        if (!cancelled) setReanimeLoading(false);
+      }
+    }
+    fetchReanime();
+    return () => { cancelled = true; };
+  }, [anilistId]);
+
 
 
   // Search Mio for matching anime
@@ -898,6 +933,9 @@ function Streaming({ onShowAuth }) {
       setAniZipEpisodes([]);
       setAniZipLoading(false);
       setAnilistId(null);
+      setReanimeEpisodes([]);
+      setReanimeLoading(false);
+      setReanimeError(null);
       setMioId(null);
       setMioError(null);
       setMioEpisodes([]);
@@ -1118,40 +1156,13 @@ function Streaming({ onShowAuth }) {
         } finally {
           if (!cancelled) setSourceLoading(false);
         }
-      } else if (activeServer === 'onsen') {
-        if (!anime) return;
-        setSourceLoading(true);
+      } else if (activeServer === 'reanime') {
+        // Reanime uses the worker API loaded episodes. We don't fetch HLS stream sources.
+        setSourceLoading(false);
         setSourceError(null);
         setStreamSources([]);
-
-        try {
-          const data = await getOnsenStream(anime.mal_id, currentEpisode);
-          if (cancelled) return;
-          if (!data || !data.stream_url) {
-            setSourceError('No streaming source for this episode on Onsen.');
-            return;
-          }
-          setStreamSources([{ quality: 'Onsen DASH', streamUrl: data.stream_url }]);
-
-          if (data.subtitles && typeof data.subtitles === 'object') {
-            const parsedSubs = [];
-            Object.entries(data.subtitles).forEach(([langCode, url]) => {
-              const label = data.subtitle_languages?.[langCode] || langCode;
-              parsedSubs.push({
-                label: label,
-                lang: langCode,
-                url: url
-              });
-            });
-            setSubtitles(parsedSubs);
-          }
-        } catch (err) {
-          if (!cancelled) { console.error('Onsen stream fetch error:', err); setSourceError('Failed to load stream.'); }
-        } finally {
-          if (!cancelled) setSourceLoading(false);
-        }
-      } else if (activeServer === 'reanime') {
-        // 4animo uses an iframe directly based on malId. We don't fetch any stream sources.
+      } else if (activeServer === 'fouranimo') {
+        // 4animo uses an iframe directly based on malId. We don't fetch HLS stream sources.
         setSourceLoading(false);
         setSourceError(null);
         setStreamSources([]);
@@ -1196,7 +1207,7 @@ function Streaming({ onShowAuth }) {
 
     fetchStream();
     return () => { cancelled = true; };
-  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniZoneId, aniZoneEpisodes, anilistId, mioEpisodes, currentEpisode, anime, id]);
+  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniZoneId, aniZoneEpisodes, anilistId, mioEpisodes, reanimeEpisodes, currentEpisode, anime, id]);
 
   // ---- Related anime (relations from Jikan API, only anime) ----
   useEffect(() => {
@@ -1517,7 +1528,7 @@ function Streaming({ onShowAuth }) {
 
   // ---- Update watch history when anime and episode are playing ----
   useEffect(() => {
-    if (anime && (streamSources.length > 0 || activeServer === 'koto' || activeServer === 'zone' || activeServer === 'nexus' || activeServer === 'reanime' || activeServer === 'senshi' || activeServer === 'mio' || (activeServer === '123' && oneTwoThreeEmbedUrl))) {
+    if (anime && (streamSources.length > 0 || activeServer === 'koto' || activeServer === 'zone' || activeServer === 'nexus' || activeServer === 'reanime' || activeServer === 'fouranimo' || activeServer === 'senshi' || activeServer === 'mio' || (activeServer === '123' && oneTwoThreeEmbedUrl))) {
       updateWatchHistory(anime, currentEpisode, currentEpInfo?.img);
     }
   }, [anime, currentEpisode, streamSources, currentEpInfo, activeServer, oneTwoThreeEmbedUrl]);
@@ -1718,33 +1729,46 @@ function Streaming({ onShowAuth }) {
                   title={`${titleDisplay} - Episode ${currentEpisode} (Nexus)`}
                 />
               )
-            ) : activeServer === 'onsen' ? (
-              sourceLoading || initialProgress === null ? (
+            ) : activeServer === 'reanime' ? (
+              aniZipLoading || reanimeLoading || initialProgress === null ? (
                 <div className="streaming-player-loading">
                   <div className="spinner" />
-                  <span>{`Loading ep ${currentEpisode} on Onsen...`}</span>
+                  <span>Resolving Reanime server...</span>
                 </div>
-              ) : sourceError ? (
+              ) : !anilistId ? (
                 <div className="streaming-player-error">
                   <AlertCircle size={40} />
-                  <span>{sourceError}</span>
+                  <span>Reanime requires a valid AniList ID which was not found for this MAL ID.</span>
                 </div>
-              ) : streamSources.length > 0 ? (
-                <iframe
-                  src={`/embed.html?sources=${encodeURIComponent(JSON.stringify(streamSources))}&subtitles=${encodeURIComponent(JSON.stringify(subtitles))}&poster=${encodeURIComponent(anime?.images?.jpg?.large_image_url || '')}&t=${initialProgress}`}
-                  className="streaming-iframe"
-                  allowFullScreen
-                  scrolling="no"
-                  allow="autoplay; fullscreen; picture-in-picture"
-                  title={`${titleDisplay} - Episode ${currentEpisode} (Onsen)`}
-                />
-              ) : (
+              ) : reanimeError ? (
                 <div className="streaming-player-error">
                   <AlertCircle size={40} />
-                  <span>No streaming source available for Onsen.</span>
+                  <span>{reanimeError}</span>
                 </div>
-              )
-            ) : activeServer === 'reanime' ? (
+              ) : (() => {
+                const targetEp = reanimeEpisodes.find(e => e.episode === currentEpisode);
+                const embedUrl = targetEp?.servers?.find(s => s.type === 'sub')?.embed_url || targetEp?.primary_embed_url || targetEp?.servers?.[0]?.embed_url;
+                if (!embedUrl) {
+                  return (
+                    <div className="streaming-player-error">
+                      <AlertCircle size={40} />
+                      <span>No streaming source available for Reanime on Episode {currentEpisode}.</span>
+                    </div>
+                  );
+                }
+                return (
+                  <iframe
+                    src={embedUrl}
+                    className="streaming-iframe"
+                    allowFullScreen
+                    scrolling="no"
+                    allow="autoplay; fullscreen; picture-in-picture"
+                    sandbox="allow-same-origin allow-scripts"
+                    title={`${titleDisplay} - Episode ${currentEpisode} (Reanime)`}
+                  />
+                );
+              })()
+            ) : activeServer === 'fouranimo' ? (
               animeLoading || initialProgress === null ? (
                 <div className="streaming-player-loading">
                   <div className="spinner" />
@@ -2351,16 +2375,17 @@ function Streaming({ onShowAuth }) {
                 </div>
                 <span className="server-status-dot" />
               </button>
+
               <button
                 type="button"
-                className={`server-modal-option ${activeServer === 'onsen' ? 'active' : ''}`}
+                className={`server-modal-option ${activeServer === 'reanime' ? 'active' : ''}`}
                 onClick={() => {
-                  setActiveServer('onsen');
+                  setActiveServer('reanime');
                   setShowServerModal(false);
                 }}
               >
                 <div className="server-modal-details">
-                  <span className="server-name">Onsen</span>
+                  <span className="server-name">Reanime</span>
                   <div className="server-tags">
                     <span className="server-tag best">Fast</span>
                     <span className="server-tag">EN</span>
@@ -2371,9 +2396,9 @@ function Streaming({ onShowAuth }) {
 
               <button
                 type="button"
-                className={`server-modal-option ${activeServer === 'reanime' ? 'active' : ''}`}
+                className={`server-modal-option ${activeServer === 'fouranimo' ? 'active' : ''}`}
                 onClick={() => {
-                  setActiveServer('reanime');
+                  setActiveServer('fouranimo');
                   setShowServerModal(false);
                 }}
               >
@@ -2506,8 +2531,8 @@ function Streaming({ onShowAuth }) {
                     <option value="neko">Neko (EN/FAST)</option>
                     <option value="nexus">Nexus (EN/FAST)</option>
                     <option value="senshi">Senshi (EN/FAST)</option>
-                    <option value="onsen">Onsen (EN/FAST)</option>
-                    <option value="reanime">4animo (EN/FAST)</option>
+                    <option value="reanime">Reanime (EN/FAST)</option>
+                    <option value="fouranimo">4animo (EN/FAST)</option>
                     <option value="mio">Mio (TH)</option>
                     <option value="123">123 (EN)</option>
                     <option value="allanime">AllAnime (EN)</option>
