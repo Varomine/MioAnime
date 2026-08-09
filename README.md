@@ -16,6 +16,6 @@
 
 ---
 
-> Last Check : 08/07/2026
+> Last Check : 08/09/2026
 
 > Note : I've been thinking that I'd replace "All Anime" with "AniDB" and "Zone" with "AniBD" because I've been trying for long but can't make those two working, But for senshร the main site it currently maintenance
