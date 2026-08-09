@@ -1,7 +1,7 @@
 // HAnime API Service
 // Base URL: https://hanime-scraper.sapis.workers.dev/
 
-const BASE_URL = 'https://hanime-scraper.sapis.workers.dev';
+const BASE_URL = 'https://hanime-scraper.premmiz-real.workers.dev';
 
 /**
  * Cleans anime title for HAnime:
