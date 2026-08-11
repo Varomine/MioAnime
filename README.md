@@ -1,3 +1,7 @@
+# MioAnime 🌸
+
+A modern, fast, and feature-rich Anime streaming web application built with React, Vite, and custom HLS/embed streaming engines.
+
 ## Servers
 
 | Servers | Status |
@@ -11,11 +15,11 @@
 | Mio | 🟢 |
 | 123 | 🟢 |
 | All Anime | 🔴 |
-| Zone | 🔴 |
+| DB | 🟢 |
 | Hanime | 🟢 |
 
 ---
 
-> Last Check : 08/09/2026
+> Last Check : 08/11/2026
 
-> Note : I've been thinking that I'd replace "All Anime" with "AniDB" and "Zone" with "AniBD" because I've been trying for long but can't make those two working, But for senshร the main site it currently maintenance
+> Note : I've been thinking that I'd replace "All Anime" with "AniDB" because I've been trying for long but can't make those two working, But for senshi the main site it currently maintenance

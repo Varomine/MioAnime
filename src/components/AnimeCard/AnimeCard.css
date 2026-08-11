@@ -189,6 +189,14 @@
     transform: scale(1.02);
   }
 
+  .anime-card-score {
+    top: 6px;
+    left: 6px;
+    padding: 2px 6px;
+    font-size: 11px;
+    border-radius: 4px;
+  }
+
   .anime-card-overlay {
     opacity: 1;
     transform: translateY(0);
@@ -199,19 +207,31 @@
       rgba(0, 0, 0, 0.15) 90%,
       transparent 100%
     );
-    padding: var(--space-sm);
+    padding: 8px;
   }
 
   .anime-card-actions {
     opacity: 1;
     transform: translateY(0);
-    bottom: var(--space-sm);
-    right: var(--space-sm);
+    bottom: 6px;
+    right: 6px;
+    gap: 4px;
+  }
+
+  .anime-card-action-btn {
+    width: 24px;
+    height: 24px;
   }
 
   .anime-card-title {
-    font-size: var(--font-xs);
-    padding-right: 58px; /* Avoid overlapping buttons */
+    font-size: 0.78rem;
+    line-height: 1.2;
+    padding-right: 52px; /* Avoid overlapping buttons */
+  }
+
+  .anime-card-meta {
+    font-size: 10px;
+    gap: 4px;
   }
 }
 

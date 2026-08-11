@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Star, Play, Bookmark, Clock, Calendar, Tv, Loader2, X } from 'lucide-react';
 import { getAnimeById, getAnimeCharacters, getAnimeRecommendations, getAnimeEpisodes, getAnimeRelations, getStatusText, getStatusClass } from '../../services/jikanApi';
+import { searchAnikage, getAnikageEpisodes } from '../../services/animepaheApi';
 
 function getYouTubeId(trailerOrUrl) {
   if (!trailerOrUrl) return '';
@@ -22,7 +23,6 @@ function getYouTubeId(trailerOrUrl) {
   return (match && match[2].length === 11) ? match[2] : '';
 }
 import AnimeRow from '../../components/AnimeRow/AnimeRow';
-import { searchAnikage, getAnikageEpisodes } from '../../services/animepaheApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { addBookmark, removeBookmark, getBookmarks, updateBookmarkCategory } from '../../services/bookmarkService';
 import './AnimeDetail.css';
@@ -219,84 +219,92 @@ function AnimeDetail({ onShowAuth }) {
 
   useEffect(() => {
     let cancelled = false;
+
+    async function searchAnikageForAnime(animeData) {
+      const titles = [...new Set([
+        animeData.title_english,
+        animeData.title,
+        animeData.title_japanese
+      ].filter(Boolean))];
+
+      for (const title of titles) {
+        if (cancelled) return null;
+        try {
+          const results = await searchAnikage(title);
+          if (cancelled) return null;
+          const match = findBestAnikageMatch(animeData, results);
+          if (match && match.slug) {
+            return match.slug;
+          }
+        } catch (err) {
+          console.error(`Anikage search failed for "${title}":`, err);
+        }
+      }
+      return null;
+    }
+
     async function fetchEpisodes() {
       if (!anime) return;
       setEpisodesLoading(true);
 
-      const titles = [...new Set([
-        anime.title,
-        anime.title_english,
-        anime.title_japanese
-      ].filter(Boolean))];
+      try {
+        // 1. Try Anikage search & episode list first
+        const slug = await searchAnikageForAnime(anime);
+        if (cancelled) return;
 
-      let resolvedSlug = null;
-      let anikageEps = [];
-
-      // 1. Search Anikage
-      if (parseInt(id) === 5042) {
-        resolvedSlug = '8XzUtDNZYp';
-      } else {
-        let allCandidates = [];
-        const seenSlugs = new Set();
-
-        for (const title of titles) {
+        if (slug) {
+          const { episodes: anikageEps } = await getAnikageEpisodes(slug);
           if (cancelled) return;
-          try {
-            const results = await searchAnikage(title);
-            if (results && results.length > 0) {
-              for (const r of results) {
-                if (r.slug && !seenSlugs.has(r.slug)) {
-                  seenSlugs.add(r.slug);
-                  allCandidates.push(r);
-                }
-              }
-            }
-          } catch (err) {
-            console.error('Anikage search in details failed:', err);
-          }
-        }
-
-        const match = findBestAnikageMatch(anime, allCandidates);
-        if (match) {
-          resolvedSlug = match.slug;
-        }
-      }
-
-      // 2. Fetch episodes list from Anikage if slug found
-      if (resolvedSlug) {
-        try {
-          const { episodes: eps } = await getAnikageEpisodes(resolvedSlug);
-          if (eps && eps.length > 0) {
-            anikageEps = eps
-              .filter(e => e.number > 0)
-              .map(e => ({ mal_id: e.number, title: e.title || `Episode ${e.number}` }))
+          if (anikageEps && anikageEps.length > 0) {
+            const formatted = anikageEps
+              .filter(ep => ep.number > 0)
+              .map(ep => ({
+                mal_id: ep.number,
+                title: ep.title || `Episode ${ep.number}`,
+                img: ep.img || null
+              }))
               .sort((a, b) => a.mal_id - b.mal_id);
+
+            setEpisodes(formatted);
+            setEpisodesLoading(false);
+            return;
           }
-        } catch (err) {
-          console.error('Anikage fetch episodes failed:', err);
         }
-      }
 
-      if (cancelled) return;
+        // 2. Fallback to Tenrai API
+        const data = await getAnimeEpisodes(id);
+        if (cancelled) return;
 
-      // 3. Fallback to Jikan if Anikage returned nothing
-      if (anikageEps.length > 0) {
-        setEpisodes(anikageEps);
-        setEpisodesLoading(false);
-      } else {
-        try {
-          const data = await getAnimeEpisodes(id);
-          if (!cancelled) setEpisodes(data.data || []);
-        } catch (err) {
-          console.error('Failed to fetch Jikan episodes:', err);
-        } finally {
-          if (!cancelled) setEpisodesLoading(false);
+        let tenraiEps = (data?.data || [])
+          .filter(e => e.mal_id > 0)
+          .map(e => ({ mal_id: e.mal_id, title: e.title || `Episode ${e.mal_id}` }))
+          .sort((a, b) => a.mal_id - b.mal_id);
+
+        if (tenraiEps.length > 0) {
+          setEpisodes(tenraiEps);
+        } else {
+          // If Tenrai returned no episode array, generate episode list from anime.episodes or aired count
+          const totalEps = anime.episodes || anime.episodes_aired || 0;
+          if (totalEps > 0) {
+            const fallback = Array.from({ length: totalEps }, (_, i) => ({
+              mal_id: i + 1,
+              title: `Episode ${i + 1}`
+            }));
+            setEpisodes(fallback);
+          } else {
+            setEpisodes([]);
+          }
         }
+      } catch (err) {
+        console.error('Failed to fetch episodes:', err);
+        setEpisodes([]);
+      } finally {
+        if (!cancelled) setEpisodesLoading(false);
       }
     }
 
-    const timer = setTimeout(fetchEpisodes, 400);
-    return () => { cancelled = true; clearTimeout(timer); };
+    fetchEpisodes();
+    return () => { cancelled = true; };
   }, [id, anime]);
 
   useEffect(() => {

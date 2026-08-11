@@ -94,8 +94,8 @@
 
 /* Each card inside the row */
 .anime-row-container .anime-card {
-  min-width: 180px;
-  max-width: 200px;
+  min-width: 160px;
+  max-width: 180px;
   flex-shrink: 0;
 }
 
@@ -156,8 +156,8 @@
 }
 
 .anime-row-skeleton-card {
-  min-width: 180px;
-  aspect-ratio: 3 / 4;
+  min-width: 160px;
+  aspect-ratio: 2 / 3;
   border-radius: var(--radius-lg);
   flex-shrink: 0;
   background: linear-gradient(
@@ -180,19 +180,22 @@
   }
 
   .anime-row-header {
-    padding: 0 var(--space-xl);
+    padding: 0 var(--space-lg);
   }
 
   .anime-row-container {
-    padding: var(--space-sm) var(--space-xl);
+    gap: 12px;
+    padding: var(--space-xs) var(--space-lg);
   }
 
   .anime-row-container .anime-card {
-    min-width: 170px;
+    min-width: 140px;
+    max-width: 150px;
   }
 
   .anime-row-skeleton-card {
-    min-width: 170px;
+    min-width: 140px;
+    aspect-ratio: 2 / 3;
   }
 
   .anime-row-arrow {
@@ -206,19 +209,22 @@
 
 @media (max-width: 480px) {
   .anime-row-header {
-    padding: 0 20px;
+    padding: 0 16px;
   }
 
   .anime-row-container {
-    padding: var(--space-sm) 20px;
+    gap: 10px;
+    padding: var(--space-xs) 16px;
   }
 
   .anime-row-container .anime-card {
-    min-width: 150px;
+    min-width: 130px;
+    max-width: 138px;
   }
 
   .anime-row-skeleton-card {
-    min-width: 150px;
+    min-width: 130px;
+    aspect-ratio: 2 / 3;
   }
 
   .anime-row {

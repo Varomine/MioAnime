@@ -11,6 +11,8 @@
 .streaming-layout {
   display: flex;
   gap: var(--space-xl);
+  align-items: flex-start;
+  width: 100%;
 }
 
 /* ---- Main Content (Left) ---- */
@@ -312,15 +314,18 @@
 
 /* ---- Episodes Panel (Right) ---- */
 .streaming-episodes-panel {
-  width: 300px;
+  width: 340px;
   flex-shrink: 0;
+  min-width: 300px;
+  box-sizing: border-box;
 }
 
 .streaming-episodes-header {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: var(--space-lg);
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: var(--space-sm);
+  min-height: 20px;
 }
 
 .streaming-episodes-title {
@@ -468,20 +473,17 @@
 
 /* ---- Responsive ---- */
 @media (max-width: 1024px) {
-  .streaming-episodes-panel {
-    width: 100%;
-  }
-}
-
-@media (max-width: 768px) {
   .streaming-layout {
     flex-direction: column;
   }
 
   .streaming-episodes-panel {
     width: 100%;
+    min-width: 0;
   }
+}
 
+@media (max-width: 768px) {
   .streaming-related-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -737,18 +739,23 @@
 
 /* Range Pagination Buttons Container & Track */
 .streaming-ep-ranges-container {
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   width: 100%;
   margin-bottom: var(--space-md);
+  box-sizing: border-box;
 }
 
 .streaming-ep-pagination {
   display: flex;
   overflow-x: auto;
   gap: var(--space-xs);
-  padding: 4px 28px;
+  padding: 4px 0;
   scroll-behavior: smooth;
   scrollbar-width: none;
+  flex: 1;
+  min-width: 0;
 }
 
 .streaming-ep-pagination::-webkit-scrollbar {
@@ -756,11 +763,10 @@
 }
 
 .streaming-range-scroll-btn {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 24px;
-  height: 24px;
+  position: relative;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -777,14 +783,6 @@
   background: var(--accent-gold);
   color: #000;
   border-color: var(--accent-gold);
-}
-
-.streaming-range-scroll-btn.left {
-  left: 0;
-}
-
-.streaming-range-scroll-btn.right {
-  right: 0;
 }
 
 .streaming-page-tab-btn {

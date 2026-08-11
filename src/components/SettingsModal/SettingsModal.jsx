@@ -54,10 +54,10 @@ export default function SettingsModal({ isOpen, onClose }) {
                 className={`server-custom-dropdown-btn ${serverDropdownOpen ? 'active' : ''}`}
                 onClick={() => setServerDropdownOpen(prev => !prev)}
               >
-                <span>{defaultServer === 'neko' ? 'Neko' : defaultServer === 'miko' ? 'Miko' : defaultServer === 'koto' ? 'Koto' : defaultServer === '123' ? '123' : defaultServer === 'allanime' ? 'AllAnime' : defaultServer === 'hanime' ? 'HAnime' : defaultServer === 'nexus' ? 'Nexus' : defaultServer === 'senshi' ? 'Senshi' : defaultServer === 'reanime' ? 'Reanime' : defaultServer === 'fouranimo' ? '4animo' : defaultServer === 'mio' ? 'Mio' : 'Zone'}</span>
+                <span>{defaultServer === 'neko' ? 'Neko' : defaultServer === 'miko' ? 'Miko' : defaultServer === 'koto' ? 'Koto' : defaultServer === '123' ? '123' : defaultServer === 'allanime' ? 'AllAnime' : defaultServer === 'hanime' ? 'HAnime' : defaultServer === 'nexus' ? 'Nexus' : defaultServer === 'senshi' ? 'Senshi' : defaultServer === 'reanime' ? 'Reanime' : defaultServer === 'fouranimo' ? '4animo' : defaultServer === 'mio' ? 'Mio' : 'DB'}</span>
                 <ChevronDown size={16} className={`server-custom-dropdown-chevron ${serverDropdownOpen ? 'rotated' : ''}`} />
               </button>
- 
+
               {serverDropdownOpen && (
                 <div className="server-custom-dropdown-menu animate-scale-in">
                   <button
@@ -73,7 +73,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                     </span>
                     <span>Koto <span className="server-dropdown-tag best">Fast</span><span className="server-dropdown-tag">EN</span><span className="server-dropdown-tag ads">Ads</span></span>
                   </button>
- 
+
                   <button
                     type="button"
                     className={`server-custom-dropdown-option ${defaultServer === 'neko' ? 'selected' : ''}`}
@@ -87,7 +87,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                     </span>
                     <span>Neko <span className="server-dropdown-tag best">Fast</span><span className="server-dropdown-tag">EN</span></span>
                   </button>
- 
+
                   <button
                     type="button"
                     className={`server-custom-dropdown-option ${defaultServer === 'nexus' ? 'selected' : ''}`}
@@ -190,16 +190,16 @@ export default function SettingsModal({ isOpen, onClose }) {
 
                   <button
                     type="button"
-                    className={`server-custom-dropdown-option ${defaultServer === 'zone' ? 'selected' : ''}`}
+                    className={`server-custom-dropdown-option ${defaultServer === 'db' ? 'selected' : ''}`}
                     onClick={() => {
-                      setDefaultServer('zone');
+                      setDefaultServer('db');
                       setServerDropdownOpen(false);
                     }}
                   >
                     <span className="server-option-check-box">
-                      {defaultServer === 'zone' && <Check size={10} strokeWidth={3} />}
+                      {defaultServer === 'db' && <Check size={10} strokeWidth={3} />}
                     </span>
-                    <span>Zone <span className="server-dropdown-tag">EN</span></span>
+                    <span>DB <span className="server-dropdown-tag best">Fast</span><span className="server-dropdown-tag">Sub</span></span>
                   </button>
 
                   <button

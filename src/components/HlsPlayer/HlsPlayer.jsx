@@ -69,15 +69,24 @@ export default function HlsPlayer({ sources, poster, intro, outro, initialTime =
 
   const getStreamUrl = useCallback((quality) => {
     if (!sources?.length) return null;
+    let selected = null;
     if (quality === 'auto' || !sources.find(s => s.quality === quality)) {
       const priority = ['1080p', '720p', '480p', '360p'];
       for (const q of priority) {
         const s = sources.find(src => src.quality === q);
-        if (s) return s.streamUrl;
+        if (s) { selected = s.streamUrl || s.url; break; }
       }
-      return sources[0]?.streamUrl;
+      if (!selected) selected = sources[0]?.streamUrl || sources[0]?.url;
+    } else {
+      const s = sources.find(src => src.quality === quality);
+      selected = s?.streamUrl || s?.url || null;
     }
-    return sources.find(s => s.quality === quality)?.streamUrl || null;
+
+    if (selected && (selected.includes('.m3u8') || selected.includes('/proxy') || selected.includes('/stream/')) && !selected.includes('#')) {
+      selected += '#file.m3u8';
+    }
+
+    return selected;
   }, [sources]);
 
   const destroyHls = useCallback(() => {
@@ -124,7 +133,7 @@ export default function HlsPlayer({ sources, poster, intro, outro, initialTime =
       }
     };
 
-    const isHls = streamUrl.includes('.m3u8') || streamUrl.includes('index.txt') || streamUrl.includes('/stream/');
+    const isHls = streamUrl && (streamUrl.includes('.m3u8') || streamUrl.includes('index.txt') || streamUrl.includes('/stream/') || streamUrl.includes('proxy') || streamUrl.includes('workers.dev'));
 
     // Safari / iOS OR Non-HLS streams (like direct WebM/MP4 links)
     if (USE_NATIVE_HLS || !isHls) {

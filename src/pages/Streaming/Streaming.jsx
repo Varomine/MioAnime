@@ -5,7 +5,7 @@ import { searchAnikage, getAnikageEpisodes, getAnikageStreams, getBestSource } f
 import { search123Anime, get123AnimeStream } from '../../services/123animeApi';
 import { searchAllAnime, getAllAnimeStream } from '../../services/allanimeApi';
 import { getHAnimeStreams } from '../../services/hanimeApi';
-import { searchAniZone, getAniZoneEpisodes, getAniZoneStream } from '../../services/anizoneApi';
+import { searchAniDb, getAniDbAnime, getAniDbEpisodeStream, findBestAniDbMatch } from '../../services/aniDbApi';
 import { searchVerse, getVerseStream } from '../../services/verseApi';
 import { getSenshiStream } from '../../services/senshiApi';
 import { getReanimeEpisodes } from '../../services/reanimeApi';
@@ -559,12 +559,12 @@ function Streaming({ onShowAuth }) {
   const [allAnimeLoading, setAllAnimeLoading] = useState(false);
   const [allAnimeError, setAllAnimeError] = useState(null);
 
-  const [aniZoneId, setAniZoneId] = useState(null);
-  const [aniZoneLoading, setAniZoneLoading] = useState(false);
-  const [aniZoneError, setAniZoneError] = useState(null);
-  const [aniZoneSubtitles, setAniZoneSubtitles] = useState([]);
-  const [aniZoneEpisodes, setAniZoneEpisodes] = useState([]);
-  const [aniZoneEpisodesLoading, setAniZoneEpisodesLoading] = useState(false);
+  const [aniDbId, setAniDbId] = useState(null);
+  const [aniDbLoading, setAniDbLoading] = useState(false);
+  const [aniDbError, setAniDbError] = useState(null);
+  const [aniDbSubtitles, setAniDbSubtitles] = useState([]);
+  const [aniDbEpisodes, setAniDbEpisodes] = useState([]);
+  const [aniDbEpisodesLoading, setAniDbEpisodesLoading] = useState(false);
 
   const [aniZipEpisodes, setAniZipEpisodes] = useState([]);
   const [aniZipLoading, setAniZipLoading] = useState(false);
@@ -743,10 +743,10 @@ function Streaming({ onShowAuth }) {
     }
   }
 
-  // Search AniZone for matching anime
-  async function searchAniZoneForAnime(animeData, cancelled) {
-    setAniZoneLoading(true);
-    setAniZoneError(null);
+  // Search AniDB for matching anime
+  async function searchAniDbForAnime(animeData, cancelled) {
+    setAniDbLoading(true);
+    setAniDbError(null);
 
     const titles = [...new Set([
       animeData.title_english,
@@ -757,35 +757,37 @@ function Streaming({ onShowAuth }) {
     for (const title of titles) {
       if (cancelled) return;
       try {
-        const match = await searchAniZone(title);
+        const results = await searchAniDb(title);
+        if (cancelled) return;
+        const match = findBestAniDbMatch(animeData, results);
         if (match && match.id) {
-          setAniZoneId(match.id);
-          setAniZoneLoading(false);
-          fetchAniZoneEpisodesList(match.id, cancelled);
+          setAniDbId(match.id);
+          setAniDbLoading(false);
+          fetchAniDbEpisodesList(match.id, cancelled);
           return;
         }
       } catch (err) {
-        console.error(`AniZone search failed for "${title}":`, err);
+        console.error(`AniDB search failed for "${title}":`, err);
       }
     }
 
     if (!cancelled) {
-      setAniZoneError('Anime not found on AniZone.');
-      setAniZoneLoading(false);
+      setAniDbError('Anime not found on DB server.');
+      setAniDbLoading(false);
     }
   }
 
-  // Fetch episodes for AniZone
-  async function fetchAniZoneEpisodesList(aniZoneId, cancelled) {
-    setAniZoneEpisodesLoading(true);
+  // Fetch episodes for AniDB
+  async function fetchAniDbEpisodesList(aniDbId, cancelled) {
+    setAniDbEpisodesLoading(true);
     try {
-      const data = await getAniZoneEpisodes(aniZoneId);
+      const data = await getAniDbAnime(aniDbId);
       if (cancelled) return;
-      setAniZoneEpisodes(data.episodes || []);
+      setAniDbEpisodes(data?.episodes || []);
     } catch (err) {
-      console.error('AniZone episodes fetch failed:', err);
+      console.error('AniDB episodes fetch failed:', err);
     } finally {
-      if (!cancelled) setAniZoneEpisodesLoading(false);
+      if (!cancelled) setAniDbEpisodesLoading(false);
     }
   }
 
@@ -926,10 +928,10 @@ function Streaming({ onShowAuth }) {
       setOneTwoThreeError(null);
       setAllAnimeId(null);
       setAllAnimeError(null);
-      setAniZoneId(null);
-      setAniZoneError(null);
-      setAniZoneSubtitles([]);
-      setAniZoneEpisodes([]);
+      setAniDbId(null);
+      setAniDbError(null);
+      setAniDbSubtitles([]);
+      setAniDbEpisodes([]);
       setAniZipEpisodes([]);
       setAniZipLoading(false);
       setAnilistId(null);
@@ -980,8 +982,8 @@ function Streaming({ onShowAuth }) {
         // Search AllAnime
         searchAllAnimeForAnime(data.data, cancelled);
   
-        // Search AniZone
-        searchAniZoneForAnime(data.data, cancelled);
+        // Search AniDB
+        searchAniDbForAnime(data.data, cancelled);
   
         // Fetch AniZip mappings
         fetchAniZip(malId, cancelled);
@@ -1019,11 +1021,19 @@ function Streaming({ onShowAuth }) {
     return () => { cancelled = true; };
   }, [anikageSlug]);
 
+  const lastStreamFetchKey = useRef('');
+
   // ---- Step 4: Get stream when episode changes ----
   useEffect(() => {
     let cancelled = false;
 
     const fetchStream = async () => {
+      const fetchKey = `${activeServer}-${id}-${currentEpisode}-${aniDbId || ''}-${anikageSlug || ''}-${allAnimeId || ''}`;
+      if (lastStreamFetchKey.current === fetchKey && streamSources.length > 0) {
+        return;
+      }
+      lastStreamFetchKey.current = fetchKey;
+
       setSubtitles([]);
       if (activeServer === 'neko') {
         if (!anikageSlug) return;
@@ -1109,26 +1119,65 @@ function Streaming({ onShowAuth }) {
         } finally {
           if (!cancelled) setSourceLoading(false);
         }
-      } else if (activeServer === 'zone') {
-        if (!aniZoneId) return;
+      } else if (activeServer === 'db') {
+        if (!aniDbId) return;
         setSourceLoading(true);
         setSourceError(null);
         setStreamSources([]);
-        setAniZoneSubtitles([]);
+        setAniDbSubtitles([]);
 
         try {
-          const epMatch = aniZoneEpisodes.find(ep => ep.number === currentEpisode);
+          let eps = aniDbEpisodes;
+          if (eps.length === 0) {
+            const freshAnime = await getAniDbAnime(aniDbId);
+            if (freshAnime && Array.isArray(freshAnime.episodes)) {
+              eps = freshAnime.episodes;
+              setAniDbEpisodes(freshAnime.episodes);
+            }
+          }
+
+          // 1. Try matching exact episode number
+          let epMatch = eps.find(ep => ep.number === currentEpisode);
+          
+          // 2. Try matching 1-based index (e.g. Episode 1 -> eps[0])
+          if (!epMatch && eps[currentEpisode - 1]) {
+            epMatch = eps[currentEpisode - 1];
+          }
+
+          // 3. Try matching cumulative episode offset (e.g. eps start at 67 for Season 4)
+          if (!epMatch && eps.length > 0) {
+            const minEp = Math.min(...eps.map(e => e.number || 1));
+            const targetNum = minEp + currentEpisode - 1;
+            epMatch = eps.find(ep => ep.number === targetNum) || eps[0];
+          }
+
           const epId = epMatch ? epMatch.id : null;
-          const data = await getAniZoneStream(aniZoneId, currentEpisode, epId);
-          if (cancelled) return;
-          if (!data || !data.streams || data.streams.length === 0) {
-            setSourceError('No streaming source for this episode on Zone.');
+          if (!epId) {
+            setSourceError('Episode not found on DB server.');
             return;
           }
-          setStreamSources(data.streams);
-          setAniZoneSubtitles(data.subtitles || []);
+
+          const streamData = await getAniDbEpisodeStream(epId);
+          if (cancelled) return;
+
+          if (streamData && streamData.streamUrl) {
+            setStreamSources([{
+              url: streamData.streamUrl,
+              streamUrl: streamData.streamUrl,
+              quality: streamData.quality || 'Auto',
+              type: streamData.type || 'm3u8'
+            }]);
+          } else if (streamData && streamData.embedUrl) {
+            setStreamSources([{
+              url: streamData.embedUrl,
+              quality: 'Auto',
+              type: 'iframe'
+            }]);
+          } else {
+            setSourceError('No streaming source for this episode on DB.');
+          }
         } catch (err) {
-          if (!cancelled) { console.error('Zone stream fetch error:', err); setSourceError('Failed to load stream.'); }
+          if (!cancelled) { console.error('DB stream fetch error:', err); setSourceError('Failed to load stream from DB.'); }
         } finally {
           if (!cancelled) setSourceLoading(false);
         }
@@ -1207,7 +1256,7 @@ function Streaming({ onShowAuth }) {
 
     fetchStream();
     return () => { cancelled = true; };
-  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniZoneId, aniZoneEpisodes, anilistId, mioEpisodes, reanimeEpisodes, currentEpisode, anime, id]);
+  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniDbId, anilistId, currentEpisode, anime, id]);
 
   // ---- Related anime (relations from Jikan API, only anime) ----
   useEffect(() => {
@@ -1439,12 +1488,13 @@ function Streaming({ onShowAuth }) {
         return Array.from({ length: Math.min(count, 1500) }, (_, i) => ({ number: i + 1, title: `Episode ${i + 1}` }));
       }
       return [];
-    } else if (activeServer === 'zone') {
-      if (aniZoneEpisodes.length > 0) {
-        return aniZoneEpisodes.map(ep => ({
-          number: ep.number,
-          title: ep.title,
-          img: ep.img
+    } else if (activeServer === 'db') {
+      if (aniDbEpisodes.length > 0) {
+        return aniDbEpisodes.map((ep, idx) => ({
+          number: idx + 1,
+          realNumber: ep.number,
+          title: ep.title || `Episode ${idx + 1}`,
+          img: ep.img || null
         })).sort((a, b) => a.number - b.number);
       }
       if (count > 0) {
@@ -1474,7 +1524,7 @@ function Streaming({ onShowAuth }) {
         };
       });
     }
-  }, [aniZipEpisodes, anikageEpisodes, aniZoneEpisodes, mioEpisodes, totalEpisodeCount, anime, activeServer, currentEpisode]);
+  }, [aniZipEpisodes, anikageEpisodes, aniDbEpisodes, mioEpisodes, totalEpisodeCount, anime, activeServer, currentEpisode]);
 
   const maxEpisode = episodeList.length > 0 ? Math.max(...episodeList.map(ep => ep.number)) : 0;
 
@@ -1482,8 +1532,8 @@ function Streaming({ onShowAuth }) {
     const fromList = episodeList.find(ep => ep.number === currentEpisode);
     if (fromList) return fromList;
 
-    if (activeServer === 'zone') {
-      const existing = aniZoneEpisodes.find(ep => ep.number === currentEpisode);
+    if (activeServer === 'db') {
+      const existing = aniDbEpisodes.find(ep => ep.number === currentEpisode) || aniDbEpisodes[currentEpisode - 1];
       if (existing) return existing;
     }
     if (activeServer === 'mio') {
@@ -1508,7 +1558,7 @@ function Streaming({ onShowAuth }) {
       img: anime?.images?.jpg?.large_image_url || null,
       description: ''
     };
-  }, [episodeList, anikageEpisodes, aniZoneEpisodes, mioEpisodes, activeServer, currentEpisode, anime]);
+  }, [episodeList, anikageEpisodes, aniDbEpisodes, mioEpisodes, activeServer, currentEpisode, anime]);
 
   // ---- Episode Pagination calculations ----
   const PAGE_SIZE = 100;
@@ -1528,7 +1578,7 @@ function Streaming({ onShowAuth }) {
 
   // ---- Update watch history when anime and episode are playing ----
   useEffect(() => {
-    if (anime && (streamSources.length > 0 || activeServer === 'koto' || activeServer === 'zone' || activeServer === 'nexus' || activeServer === 'reanime' || activeServer === 'fouranimo' || activeServer === 'senshi' || activeServer === 'mio' || (activeServer === '123' && oneTwoThreeEmbedUrl))) {
+    if (anime && (streamSources.length > 0 || activeServer === 'koto' || activeServer === 'db' || activeServer === 'nexus' || activeServer === 'reanime' || activeServer === 'fouranimo' || activeServer === 'senshi' || activeServer === 'mio' || (activeServer === '123' && oneTwoThreeEmbedUrl))) {
       updateWatchHistory(anime, currentEpisode, currentEpInfo?.img);
     }
   }, [anime, currentEpisode, streamSources, currentEpInfo, activeServer, oneTwoThreeEmbedUrl]);
@@ -1682,11 +1732,11 @@ function Streaming({ onShowAuth }) {
                   <span>No streaming source available for HAnime.</span>
                 </div>
               )
-            ) : activeServer === 'zone' ? (
+            ) : activeServer === 'db' ? (
               sourceLoading || initialProgress === null ? (
                 <div className="streaming-player-loading">
                   <div className="spinner" />
-                  <span>{`Loading ep ${currentEpisode} on Zone...`}</span>
+                  <span>{`Loading ep ${currentEpisode} on DB...`}</span>
                 </div>
               ) : sourceError ? (
                 <div className="streaming-player-error">
@@ -1694,18 +1744,32 @@ function Streaming({ onShowAuth }) {
                   <span>{sourceError}</span>
                 </div>
               ) : streamSources.length > 0 ? (
-                <iframe
-                  src={`/embed.html?sources=${encodeURIComponent(JSON.stringify(streamSources))}&subtitles=${encodeURIComponent(JSON.stringify(aniZoneSubtitles))}&poster=${encodeURIComponent(anime?.images?.jpg?.large_image_url || '')}&t=${initialProgress}`}
-                  className="streaming-iframe"
-                  allowFullScreen
-                  scrolling="no"
-                  allow="autoplay; fullscreen; picture-in-picture"
-                  title={`${titleDisplay} - Episode ${currentEpisode} (Zone)`}
-                />
+                streamSources[0].type === 'iframe' ? (
+                  <iframe
+                    src={streamSources[0].url}
+                    className="streaming-iframe"
+                    allowFullScreen
+                    scrolling="no"
+                    allow="autoplay; fullscreen; picture-in-picture"
+                    title={`${titleDisplay} - Episode ${currentEpisode} (DB)`}
+                  />
+                ) : (
+                  <HlsPlayer
+                    key={`db-${id}-${currentEpisode}`}
+                    sources={streamSources}
+                    title={`${titleDisplay} - Episode ${currentEpisode}`}
+                    intro={introTimestamp}
+                    outro={outroTimestamp}
+                    initialTime={initialProgress}
+                    onProgress={(time, duration) => {
+                      saveEpisodeProgress(parseInt(id), currentEpisode, time, duration);
+                    }}
+                  />
+                )
               ) : (
                 <div className="streaming-player-error">
                   <AlertCircle size={40} />
-                  <span>No streaming source available for Zone.</span>
+                  <span>No streaming source available for DB.</span>
                 </div>
               )
             ) : activeServer === 'nexus' ? (
@@ -2185,7 +2249,6 @@ function Streaming({ onShowAuth }) {
           {activeTab === 'episodes' ? (
             <>
               <div className="streaming-episodes-header">
-                <h3>EPISODES</h3>
                 <span className="streaming-episodes-count">
                   {episodesLoading ? 'Loading...' : episodeList.length > 0 ? `${episodeList.length} available` : 'N/A'}
                 </span>
@@ -2464,16 +2527,17 @@ function Streaming({ onShowAuth }) {
               </button>
               <button
                 type="button"
-                className={`server-modal-option ${activeServer === 'zone' ? 'active' : ''}`}
+                className={`server-modal-option ${activeServer === 'db' ? 'active' : ''}`}
                 onClick={() => {
-                  setActiveServer('zone');
+                  setActiveServer('db');
                   setShowServerModal(false);
                 }}
               >
                 <div className="server-modal-details">
-                  <span className="server-name">Zone</span>
+                  <span className="server-name">DB</span>
                   <div className="server-tags">
-                    <span className="server-tag">EN</span>
+                    <span className="server-tag best">Fast</span>
+                    <span className="server-tag">Sub</span>
                   </div>
                 </div>
                 <span className="server-status-dot" />
@@ -2536,7 +2600,8 @@ function Streaming({ onShowAuth }) {
                     <option value="mio">Mio (TH)</option>
                     <option value="123">123 (EN)</option>
                     <option value="allanime">AllAnime (EN)</option>
-                    <option value="zone">Zone (EN)</option>
+                    <option value="zone" style={{ display: 'none' }}>Zone (EN)</option>
+                    <option value="db">DB (Sub/FAST)</option>
                     <option value="hanime">HAnime (18+ EN)</option>
                   </select>
                 </div>
