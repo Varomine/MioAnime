@@ -25,38 +25,50 @@ import './Streaming.css';
 function normalizeTitle(str) {
   if (!str) return '';
   return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 function getSeasonNumber(titleStr) {
-  const norm = titleStr.toLowerCase();
-  const seasonMatch = norm.match(/season\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)/);
+  if (!titleStr) return 1;
+  const norm = titleStr.toLowerCase().trim();
+
+  // 1. "Season 2", "Season 3", "Season Two"
+  const seasonMatch = norm.match(/\bseason\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/);
   if (seasonMatch) {
     const val = seasonMatch[1];
-    if (/\d+/.test(val)) return parseInt(val);
+    if (/\d+/.test(val)) return parseInt(val, 10);
     const words = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
-    return words[val] || null;
+    return words[val] || 1;
   }
-  const ordinalMatch = norm.match(/(\d+)(st|nd|rd|th)\s+season/);
+
+  // 2. "2nd Season", "3rd Season", "2nd"
+  const ordinalMatch = norm.match(/\b(\d+)(st|nd|rd|th)\b/);
   if (ordinalMatch) {
-    return parseInt(ordinalMatch[1]);
+    return parseInt(ordinalMatch[1], 10);
   }
+
+  // 3. Roman numerals at end of string: " II", " III", " IV", " V", " VI"
   const romanMatch = norm.match(/\s+(ii|iii|iv|v|vi|vii|viii|ix|x)$/);
   if (romanMatch) {
     const roman = romanMatch[1];
     const map = { ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10 };
-    return map[roman] || null;
+    return map[roman] || 1;
   }
-  return null;
+
+  return 1;
 }
 
 function cleanTitleForBaseComparison(normTitle) {
   return normTitle
-    .replace(/season\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)/g, '')
-    .replace(/(\d+)(st|nd|rd|th)\s+season/g, '')
+    .replace(/\b(tv|movie|special|ova|ona)\b/g, '')
+    .replace(/\bseason\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/g, '')
+    .replace(/\b(\d+)(st|nd|rd|th)\s*season\b/g, '')
+    .replace(/\b(\d+)(st|nd|rd|th)\b/g, '')
     .replace(/\s+(ii|iii|iv|v|vi|vii|viii|ix|x)$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -71,6 +83,9 @@ function findBestAnikageMatch(animeData, results) {
     ...(animeData.title_synonyms || [])
   ].filter(Boolean);
 
+  const targetEps = animeData.episodes || animeData.episodes_aired || 0;
+  const targetType = (animeData.type || animeData.format || '').toUpperCase();
+
   const scoredResults = results.map(r => {
     const resultTitles = [
       r.title?.english,
@@ -78,7 +93,7 @@ function findBestAnikageMatch(animeData, results) {
       typeof r.title === 'string' ? r.title : null
     ].filter(Boolean);
 
-    let bestScore = 0;
+    let baseScore = 0;
 
     for (const t of targetTitles) {
       const tNorm = normalizeTitle(t);
@@ -92,33 +107,55 @@ function findBestAnikageMatch(animeData, results) {
 
         if (tSeason !== rSeason) continue;
 
-        if (tBase === rBase) {
-          bestScore = Math.max(bestScore, 100);
-        } else if (tBase.includes(rBase) || rBase.includes(tBase)) {
-          const ratio = Math.min(tBase.length, rBase.length) / Math.max(tBase.length, rBase.length);
-          const score = 50 + Math.floor(ratio * 40);
-          bestScore = Math.max(bestScore, score);
+        if (tNorm === rNorm) {
+          baseScore = Math.max(baseScore, 100);
+        } else if (tBase === rBase) {
+          baseScore = Math.max(baseScore, 85);
+        } else if (tNorm.includes(rNorm) || rNorm.includes(tNorm)) {
+          const ratio = Math.min(tNorm.length, rNorm.length) / Math.max(tNorm.length, rNorm.length);
+          baseScore = Math.max(baseScore, 50 + Math.floor(ratio * 30));
         } else {
-          const tTokens = tBase.split(' ').filter(tk => tk.length > 2);
-          const rTokens = rBase.split(' ').filter(tk => tk.length > 2);
+          const tTokens = tBase.split(' ').filter(tk => tk.length > 1 && tk !== 'episode');
+          const rTokens = rBase.split(' ').filter(tk => tk.length > 1 && tk !== 'episode');
           if (tTokens.length > 0 && rTokens.length > 0) {
             const common = tTokens.filter(tk => rTokens.includes(tk));
             const ratioTarget = common.length / tTokens.length;
             const ratioResult = common.length / rTokens.length;
             const maxRatio = Math.max(ratioTarget, ratioResult);
-            if (maxRatio >= 0.7) {
-              const score = Math.floor(maxRatio * 50);
-              bestScore = Math.max(bestScore, score);
+            if (ratioTarget >= 0.5 || ratioResult >= 0.5 || common.length >= 2) {
+              baseScore = Math.max(baseScore, Math.floor(maxRatio * 70));
             }
           }
         }
       }
     }
 
-    return { result: r, score: bestScore };
+    let finalScore = baseScore;
+
+    // Episode count matching bonus / penalty
+    const candEps = r.totalEpisodes || 0;
+    if (targetEps > 0 && candEps > 0) {
+      if (targetEps === candEps) {
+        finalScore += 25; // Exact episode count match bonus
+      } else if (Math.abs(targetEps - candEps) > 3) {
+        finalScore -= 40; // Heavy penalty if TV series vs 1-episode special
+      }
+    }
+
+    // Format / type matching bonus / penalty
+    const candFormat = (r.format || '').toUpperCase();
+    if (targetType && candFormat) {
+      if (targetType === candFormat) {
+        finalScore += 15;
+      } else if ((targetType === 'MOVIE' || targetType === 'SPECIAL' || targetType === 'OVA') && candFormat === 'TV') {
+        finalScore -= 30;
+      }
+    }
+
+    return { result: r, score: finalScore };
   });
 
-  const validMatches = scoredResults.filter(item => item.score > 0);
+  const validMatches = scoredResults.filter(item => item.score >= 40);
   if (validMatches.length === 0) return null;
 
   validMatches.sort((a, b) => b.score - a.score);
@@ -335,6 +372,7 @@ function Streaming({ onShowAuth }) {
   const [activeServer, setActiveServer] = useState(defaultServer === 'miko' ? 'koto' : (defaultServer || 'neko'));
   const [showServerModal, setShowServerModal] = useState(false);
   const [selectedNekoSourceIndex, setSelectedNekoSourceIndex] = useState(0);
+  const [fourAnimoServer, setFourAnimoServer] = useState('hd-1');
 
   // Report Modal States
   const [showReportModal, setShowReportModal] = useState(false);
@@ -885,7 +923,7 @@ function Streaming({ onShowAuth }) {
       try {
         const results = await searchMio(title);
         const match = findBestMioMatch(animeData, results);
-        if (match && match.id) {
+        if (match && match.id && String(match.id).trim() && !String(match.id).includes('.') && !String(match.id).includes('/')) {
           setMioId(match.id);
           const details = await getMioAnime(match.id);
           if (cancelled) return;
@@ -969,7 +1007,7 @@ function Streaming({ onShowAuth }) {
         setAnime(data.data);
         setAnimeLoading(false);
   
-        // Only search Anikage if not cached
+        // Search Anikage to resolve slug (needed for Neko server streams)
         if (malId === 5042) {
           // Already overridden
         } else if (!slugCache.has(malId)) {
@@ -1036,7 +1074,16 @@ function Streaming({ onShowAuth }) {
 
       setSubtitles([]);
       if (activeServer === 'neko') {
-        if (!anikageSlug) return;
+        if (!anikageSlug) {
+          if (searchLoading) {
+            setSourceLoading(true);
+            return;
+          }
+          if (searchError) {
+            setSourceError(searchError);
+          }
+          return;
+        }
         setSourceLoading(true);
         setSourceError(null);
         setStreamSources([]);
@@ -1216,7 +1263,27 @@ function Streaming({ onShowAuth }) {
         setSourceError(null);
         setStreamSources([]);
       } else if (activeServer === 'mio') {
-        if (mioEpisodes.length === 0) return;
+        if (mioLoading) {
+          setSourceLoading(true);
+          setSourceError(null);
+          setStreamSources([]);
+          return;
+        }
+
+        if (mioError) {
+          setSourceLoading(false);
+          setSourceError(mioError);
+          setStreamSources([]);
+          return;
+        }
+
+        if (!mioEpisodes || mioEpisodes.length === 0) {
+          setSourceLoading(false);
+          setSourceError('No streaming source for this episode on Mio.');
+          setStreamSources([]);
+          return;
+        }
+
         setSourceLoading(true);
         setSourceError(null);
         setStreamSources([]);
@@ -1229,7 +1296,7 @@ function Streaming({ onShowAuth }) {
               return epNum === currentEpisode;
             }
             return false;
-          });
+          }) || mioEpisodes[currentEpisode - 1] || mioEpisodes[0];
 
           if (!targetEp) {
             setSourceError('No streaming source for this episode on Mio.');
@@ -1242,7 +1309,7 @@ function Streaming({ onShowAuth }) {
             setSourceError('No streaming source for this episode on Mio.');
             return;
           }
-          setStreamSources([{ quality: 'Mio', streamUrl: proxiedUrl }]);
+          setStreamSources([{ quality: 'Mio', streamUrl: proxiedUrl, url: proxiedUrl }]);
         } catch (err) {
           if (!cancelled) {
             console.error('Mio stream fetch error:', err);
@@ -1256,7 +1323,7 @@ function Streaming({ onShowAuth }) {
 
     fetchStream();
     return () => { cancelled = true; };
-  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniDbId, anilistId, currentEpisode, anime, id]);
+  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniDbId, anilistId, mioEpisodes, mioLoading, currentEpisode, anime, id]);
 
   // ---- Related anime (relations from Jikan API, only anime) ----
   useEffect(() => {
@@ -1464,19 +1531,22 @@ function Streaming({ onShowAuth }) {
     if (aniZipEpisodes.length > 0) {
       return aniZipEpisodes;
     }
+
+    const isAiring = Boolean(anime?.airing || (anime?.status && anime.status.toLowerCase() === 'currently airing'));
+
     // Determine the count of episodes that have actually aired
     let count = 0;
-    if (anikageEpisodes.length > 0) {
+    if (isAiring && anikageEpisodes.length > 0) {
       count = anikageEpisodes.length;
-    } else if (totalEpisodeCount > 0) {
-      count = totalEpisodeCount;
     } else if (anime) {
-      if (anime.status === 'Finished Airing') {
+      if (!isAiring || anime.status === 'Finished Airing') {
         count = anime.episodes || 1;
       } else {
         // Currently Airing or Upcoming: only show up to currentEpisode
         count = currentEpisode;
       }
+    } else if (totalEpisodeCount > 0) {
+      count = totalEpisodeCount;
     }
 
     if (activeServer === 'neko') {
@@ -1704,28 +1774,17 @@ function Streaming({ onShowAuth }) {
                   <span>{sourceError}</span>
                 </div>
               ) : streamSources.length > 0 ? (
-                IS_IOS && bestSource ? (
-                  <iframe
-                    src={`/embed.html?sources=${encodeURIComponent(JSON.stringify(streamSources))}&poster=${encodeURIComponent(anime?.images?.jpg?.large_image_url || '')}&t=${initialProgress}`}
-                    className="streaming-iframe"
-                    allowFullScreen
-                    scrolling="no"
-                    allow="autoplay; fullscreen; picture-in-picture"
-                    title={`${titleDisplay} - Episode ${currentEpisode} (HAnime)`}
-                  />
-                ) : (
-                  <HlsPlayer
-                    key={`hanime-${id}-${currentEpisode}`}
-                    sources={streamSources}
-                    title={`${titleDisplay} - Episode ${currentEpisode}`}
-                    intro={introTimestamp}
-                    outro={outroTimestamp}
-                    initialTime={initialProgress}
-                    onProgress={(time, duration) => {
-                      saveEpisodeProgress(parseInt(id), currentEpisode, time, duration);
-                    }}
-                  />
-                )
+                <HlsPlayer
+                  key={`hanime-${id}-${currentEpisode}`}
+                  sources={streamSources}
+                  title={`${titleDisplay} - Episode ${currentEpisode}`}
+                  intro={introTimestamp}
+                  outro={outroTimestamp}
+                  initialTime={initialProgress}
+                  onProgress={(time, duration) => {
+                    saveEpisodeProgress(parseInt(id), currentEpisode, time, duration);
+                  }}
+                />
               ) : (
                 <div className="streaming-player-error">
                   <AlertCircle size={40} />
@@ -1836,17 +1895,18 @@ function Streaming({ onShowAuth }) {
               animeLoading || initialProgress === null ? (
                 <div className="streaming-player-loading">
                   <div className="spinner" />
-                  <span>{`Loading ep ${currentEpisode} on 4animo...`}</span>
+                  <span>{`Loading ep ${currentEpisode} on 4animo (${fourAnimoServer.toUpperCase()})...`}</span>
                 </div>
               ) : (
                 <iframe
-                  src={`https://cdn.4animo.xyz/embed/hd-1/mal/${id}/${currentEpisode}/sub?k=1`}
+                  key={`fouranimo-${id}-${currentEpisode}-${fourAnimoServer}`}
+                  src={`https://cdn.4animo.xyz/embed/${fourAnimoServer}/mal/${id}/${currentEpisode}/sub?k=1`}
                   className="streaming-iframe"
                   allowFullScreen
                   scrolling="no"
                   allow="autoplay; fullscreen; picture-in-picture"
-                  sandbox="allow-same-origin allow-scripts"
-                  title={`${titleDisplay} - Episode ${currentEpisode} (4animo)`}
+                  sandbox="allow-same-origin allow-scripts allow-forms"
+                  title={`${titleDisplay} - Episode ${currentEpisode} (4animo ${fourAnimoServer.toUpperCase()})`}
                 />
               )
             ) : activeServer === 'mio' ? (
@@ -1861,13 +1921,16 @@ function Streaming({ onShowAuth }) {
                   <span>{mioError || sourceError}</span>
                 </div>
               ) : streamSources.length > 0 ? (
-                <iframe
-                  src={`/embed.html?sources=${encodeURIComponent(JSON.stringify(streamSources))}&poster=${encodeURIComponent(anime?.images?.jpg?.large_image_url || '')}&t=${initialProgress}`}
-                  className="streaming-iframe"
-                  allowFullScreen
-                  scrolling="no"
-                  allow="autoplay; fullscreen; picture-in-picture"
-                  title={`${titleDisplay} - Episode ${currentEpisode} (Mio)`}
+                <HlsPlayer
+                  key={`mio-${id}-${currentEpisode}`}
+                  sources={streamSources}
+                  title={`${titleDisplay} - Episode ${currentEpisode}`}
+                  intro={introTimestamp}
+                  outro={outroTimestamp}
+                  initialTime={initialProgress}
+                  onProgress={(time, duration) => {
+                    saveEpisodeProgress(parseInt(id), currentEpisode, time, duration);
+                  }}
                 />
               ) : (
                 <div className="streaming-player-error">
@@ -1943,6 +2006,23 @@ function Streaming({ onShowAuth }) {
                     onClick={() => setSelectedNekoSourceIndex(idx)}
                   >
                     {src.quality.replace('hardsub ', '').replace('softsub ', '')}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeServer === 'fouranimo' && (
+            <div className="streaming-neko-sources">
+              <span className="neko-sources-label">Server:</span>
+              <div className="neko-sources-list">
+                {['hd-1', 'hd-2', 'hd-3', 'hd-4'].map((srv) => (
+                  <button
+                    key={srv}
+                    className={`neko-source-btn ${fourAnimoServer === srv ? 'active' : ''}`}
+                    onClick={() => setFourAnimoServer(srv)}
+                  >
+                    {srv.toUpperCase().replace('-', ' ')}
                   </button>
                 ))}
               </div>
@@ -2369,6 +2449,7 @@ function Streaming({ onShowAuth }) {
               </button>
             </div>
             <div className="server-modal-options">
+              {/* 1. KOTO */}
               <button
                 type="button"
                 className={`server-modal-option ${activeServer === 'koto' ? 'active' : ''}`}
@@ -2382,11 +2463,12 @@ function Streaming({ onShowAuth }) {
                   <div className="server-tags">
                     <span className="server-tag best">Fast</span>
                     <span className="server-tag">EN</span>
-                    <span className="server-tag ads">Ads</span>
                   </div>
                 </div>
                 <span className="server-status-dot" />
               </button>
+
+              {/* 2. NEKO */}
               <button
                 type="button"
                 className={`server-modal-option ${activeServer === 'neko' ? 'active' : ''}`}
@@ -2404,41 +2486,27 @@ function Streaming({ onShowAuth }) {
                 </div>
                 <span className="server-status-dot" />
               </button>
+
+              {/* 3. DB */}
               <button
                 type="button"
-                className={`server-modal-option ${activeServer === 'nexus' ? 'active' : ''}`}
+                className={`server-modal-option ${activeServer === 'db' ? 'active' : ''}`}
                 onClick={() => {
-                  setActiveServer('nexus');
+                  setActiveServer('db');
                   setShowServerModal(false);
                 }}
               >
                 <div className="server-modal-details">
-                  <span className="server-name">Nexus</span>
+                  <span className="server-name">DB</span>
                   <div className="server-tags">
-                    <span className="server-tag best">Fast</span>
-                    <span className="server-tag">EN</span>
-                  </div>
-                </div>
-                <span className="server-status-dot" />
-              </button>
-              <button
-                type="button"
-                className={`server-modal-option ${activeServer === 'senshi' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveServer('senshi');
-                  setShowServerModal(false);
-                }}
-              >
-                <div className="server-modal-details">
-                  <span className="server-name">Senshi</span>
-                  <div className="server-tags">
-                    <span className="server-tag best">Fast</span>
-                    <span className="server-tag">EN</span>
+                    <span className="server-tag best">EN</span>
+                    <span className="server-tag">Sub</span>
                   </div>
                 </div>
                 <span className="server-status-dot" />
               </button>
 
+              {/* 4. REANIME */}
               <button
                 type="button"
                 className={`server-modal-option ${activeServer === 'reanime' ? 'active' : ''}`}
@@ -2457,6 +2525,7 @@ function Streaming({ onShowAuth }) {
                 <span className="server-status-dot" />
               </button>
 
+              {/* 5. 4ANIMO */}
               <button
                 type="button"
                 className={`server-modal-option ${activeServer === 'fouranimo' ? 'active' : ''}`}
@@ -2475,24 +2544,7 @@ function Streaming({ onShowAuth }) {
                 <span className="server-status-dot" />
               </button>
 
-              <button
-                type="button"
-                className={`server-modal-option ${activeServer === 'mio' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveServer('mio');
-                  setShowServerModal(false);
-                }}
-              >
-                <div className="server-modal-details">
-                  <span className="server-name">Mio</span>
-                  <div className="server-tags">
-                    <span className="server-tag best">Fast</span>
-                    <span className="server-tag">TH</span>
-                  </div>
-                </div>
-                <span className="server-status-dot" />
-              </button>
-
+              {/* 6. 123 */}
               <button
                 type="button"
                 className={`server-modal-option ${activeServer === '123' ? 'active' : ''}`}
@@ -2509,6 +2561,62 @@ function Streaming({ onShowAuth }) {
                 </div>
                 <span className="server-status-dot" />
               </button>
+
+              {/* 7. MIO */}
+              <button
+                type="button"
+                className={`server-modal-option ${activeServer === 'mio' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveServer('mio');
+                  setShowServerModal(false);
+                }}
+              >
+                <div className="server-modal-details">
+                  <span className="server-name">Mio</span>
+                  <div className="server-tags">
+                    <span className="server-tag">TH</span>
+                  </div>
+                </div>
+                <span className="server-status-dot" />
+              </button>
+
+              {/* 8. NEXUS */}
+              <button
+                type="button"
+                className={`server-modal-option ${activeServer === 'nexus' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveServer('nexus');
+                  setShowServerModal(false);
+                }}
+              >
+                <div className="server-modal-details">
+                  <span className="server-name">Nexus</span>
+                  <div className="server-tags">
+                    <span className="server-tag">EN</span>
+                  </div>
+                </div>
+                <span className="server-status-dot" />
+              </button>
+
+              {/* 9. SENSHI */}
+              <button
+                type="button"
+                className={`server-modal-option ${activeServer === 'senshi' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveServer('senshi');
+                  setShowServerModal(false);
+                }}
+              >
+                <div className="server-modal-details">
+                  <span className="server-name">Senshi</span>
+                  <div className="server-tags">
+                    <span className="server-tag">EN</span>
+                  </div>
+                </div>
+                <span className="server-status-dot" />
+              </button>
+
+              {/* 10. ALLANIME */}
               <button
                 type="button"
                 className={`server-modal-option ${activeServer === 'allanime' ? 'active' : ''}`}
@@ -2525,23 +2633,8 @@ function Streaming({ onShowAuth }) {
                 </div>
                 <span className="server-status-dot" />
               </button>
-              <button
-                type="button"
-                className={`server-modal-option ${activeServer === 'db' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveServer('db');
-                  setShowServerModal(false);
-                }}
-              >
-                <div className="server-modal-details">
-                  <span className="server-name">DB</span>
-                  <div className="server-tags">
-                    <span className="server-tag best">Fast</span>
-                    <span className="server-tag">Sub</span>
-                  </div>
-                </div>
-                <span className="server-status-dot" />
-              </button>
+
+              {/* 11. HANIME */}
               <button
                 type="button"
                 className={`server-modal-option ${activeServer === 'hanime' ? 'active' : ''}`}
@@ -2591,17 +2684,17 @@ function Streaming({ onShowAuth }) {
                     onChange={(e) => setReportServer(e.target.value)}
                     className="report-select-input"
                   >
-                    <option value="koto">Koto (EN/Ads)</option>
+                    <option value="koto">Koto (EN)</option>
                     <option value="neko">Neko (EN/FAST)</option>
-                    <option value="nexus">Nexus (EN/FAST)</option>
-                    <option value="senshi">Senshi (EN/FAST)</option>
+                    <option value="db">DB (EN/Sub)</option>
                     <option value="reanime">Reanime (EN/FAST)</option>
                     <option value="fouranimo">4animo (EN/FAST)</option>
-                    <option value="mio">Mio (TH)</option>
                     <option value="123">123 (EN)</option>
+                    <option value="mio">Mio (TH)</option>
+                    <option value="nexus">Nexus (EN)</option>
+                    <option value="senshi">Senshi (EN)</option>
                     <option value="allanime">AllAnime (EN)</option>
                     <option value="zone" style={{ display: 'none' }}>Zone (EN)</option>
-                    <option value="db">DB (Sub/FAST)</option>
                     <option value="hanime">HAnime (18+ EN)</option>
                   </select>
                 </div>

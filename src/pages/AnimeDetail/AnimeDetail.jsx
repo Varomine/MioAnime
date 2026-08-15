@@ -31,38 +31,50 @@ import './AnimeDetail.css';
 function normalizeTitle(str) {
   if (!str) return '';
   return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 function getSeasonNumber(titleStr) {
-  const norm = titleStr.toLowerCase();
-  const seasonMatch = norm.match(/season\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)/);
+  if (!titleStr) return 1;
+  const norm = titleStr.toLowerCase().trim();
+
+  // 1. "Season 2", "Season 3", "Season Two"
+  const seasonMatch = norm.match(/\bseason\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/);
   if (seasonMatch) {
     const val = seasonMatch[1];
-    if (/\d+/.test(val)) return parseInt(val);
+    if (/\d+/.test(val)) return parseInt(val, 10);
     const words = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
-    return words[val] || null;
+    return words[val] || 1;
   }
-  const ordinalMatch = norm.match(/(\d+)(st|nd|rd|th)\s+season/);
+
+  // 2. "2nd Season", "3rd Season", "2nd"
+  const ordinalMatch = norm.match(/\b(\d+)(st|nd|rd|th)\b/);
   if (ordinalMatch) {
-    return parseInt(ordinalMatch[1]);
+    return parseInt(ordinalMatch[1], 10);
   }
+
+  // 3. Roman numerals at end of string: " II", " III", " IV", " V", " VI"
   const romanMatch = norm.match(/\s+(ii|iii|iv|v|vi|vii|viii|ix|x)$/);
   if (romanMatch) {
     const roman = romanMatch[1];
     const map = { ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10 };
-    return map[roman] || null;
+    return map[roman] || 1;
   }
-  return null;
+
+  return 1;
 }
 
 function cleanTitleForBaseComparison(normTitle) {
   return normTitle
-    .replace(/season\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)/g, '')
-    .replace(/(\d+)(st|nd|rd|th)\s+season/g, '')
+    .replace(/\b(tv|movie|special|ova|ona)\b/g, '')
+    .replace(/\bseason\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/g, '')
+    .replace(/\b(\d+)(st|nd|rd|th)\s*season\b/g, '')
+    .replace(/\b(\d+)(st|nd|rd|th)\b/g, '')
     .replace(/\s+(ii|iii|iv|v|vi|vii|viii|ix|x)$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -77,6 +89,9 @@ function findBestAnikageMatch(animeData, results) {
     ...(animeData.title_synonyms || [])
   ].filter(Boolean);
 
+  const targetEps = animeData.episodes || animeData.episodes_aired || 0;
+  const targetType = (animeData.type || animeData.format || '').toUpperCase();
+
   const scoredResults = results.map(r => {
     const resultTitles = [
       r.title?.english,
@@ -84,7 +99,7 @@ function findBestAnikageMatch(animeData, results) {
       typeof r.title === 'string' ? r.title : null
     ].filter(Boolean);
 
-    let bestScore = 0;
+    let baseScore = 0;
 
     for (const t of targetTitles) {
       const tNorm = normalizeTitle(t);
@@ -98,33 +113,55 @@ function findBestAnikageMatch(animeData, results) {
 
         if (tSeason !== rSeason) continue;
 
-        if (tBase === rBase) {
-          bestScore = Math.max(bestScore, 100);
-        } else if (tBase.includes(rBase) || rBase.includes(tBase)) {
-          const ratio = Math.min(tBase.length, rBase.length) / Math.max(tBase.length, rBase.length);
-          const score = 50 + Math.floor(ratio * 40);
-          bestScore = Math.max(bestScore, score);
+        if (tNorm === rNorm) {
+          baseScore = Math.max(baseScore, 100);
+        } else if (tBase === rBase) {
+          baseScore = Math.max(baseScore, 85);
+        } else if (tNorm.includes(rNorm) || rNorm.includes(tNorm)) {
+          const ratio = Math.min(tNorm.length, rNorm.length) / Math.max(tNorm.length, rNorm.length);
+          baseScore = Math.max(baseScore, 50 + Math.floor(ratio * 30));
         } else {
-          const tTokens = tBase.split(' ').filter(tk => tk.length > 2);
-          const rTokens = rBase.split(' ').filter(tk => tk.length > 2);
+          const tTokens = tBase.split(' ').filter(tk => tk.length > 1 && tk !== 'episode');
+          const rTokens = rBase.split(' ').filter(tk => tk.length > 1 && tk !== 'episode');
           if (tTokens.length > 0 && rTokens.length > 0) {
             const common = tTokens.filter(tk => rTokens.includes(tk));
             const ratioTarget = common.length / tTokens.length;
             const ratioResult = common.length / rTokens.length;
             const maxRatio = Math.max(ratioTarget, ratioResult);
-            if (maxRatio >= 0.7) {
-              const score = Math.floor(maxRatio * 50);
-              bestScore = Math.max(bestScore, score);
+            if (ratioTarget >= 0.5 || ratioResult >= 0.5 || common.length >= 2) {
+              baseScore = Math.max(baseScore, Math.floor(maxRatio * 70));
             }
           }
         }
       }
     }
 
-    return { result: r, score: bestScore };
+    let finalScore = baseScore;
+
+    // Episode count matching bonus / penalty
+    const candEps = r.totalEpisodes || 0;
+    if (targetEps > 0 && candEps > 0) {
+      if (targetEps === candEps) {
+        finalScore += 25; // Exact episode count match bonus
+      } else if (Math.abs(targetEps - candEps) > 3) {
+        finalScore -= 40; // Heavy penalty if TV series vs 1-episode special
+      }
+    }
+
+    // Format / type matching bonus / penalty
+    const candFormat = (r.format || '').toUpperCase();
+    if (targetType && candFormat) {
+      if (targetType === candFormat) {
+        finalScore += 15;
+      } else if ((targetType === 'MOVIE' || targetType === 'SPECIAL' || targetType === 'OVA') && candFormat === 'TV') {
+        finalScore -= 30;
+      }
+    }
+
+    return { result: r, score: finalScore };
   });
 
-  const validMatches = scoredResults.filter(item => item.score > 0);
+  const validMatches = scoredResults.filter(item => item.score >= 40);
   if (validMatches.length === 0) return null;
 
   validMatches.sort((a, b) => b.score - a.score);
@@ -247,31 +284,35 @@ function AnimeDetail({ onShowAuth }) {
       if (!anime) return;
       setEpisodesLoading(true);
 
+      const isAiring = Boolean(anime.airing || (anime.status && anime.status.toLowerCase() === 'currently airing'));
+
       try {
-        // 1. Try Anikage search & episode list first
-        const slug = await searchAnikageForAnime(anime);
-        if (cancelled) return;
-
-        if (slug) {
-          const { episodes: anikageEps } = await getAnikageEpisodes(slug);
+        // 1. If currently airing, try Anikage search & episode list first
+        if (isAiring) {
+          const slug = await searchAnikageForAnime(anime);
           if (cancelled) return;
-          if (anikageEps && anikageEps.length > 0) {
-            const formatted = anikageEps
-              .filter(ep => ep.number > 0)
-              .map(ep => ({
-                mal_id: ep.number,
-                title: ep.title || `Episode ${ep.number}`,
-                img: ep.img || null
-              }))
-              .sort((a, b) => a.mal_id - b.mal_id);
 
-            setEpisodes(formatted);
-            setEpisodesLoading(false);
-            return;
+          if (slug) {
+            const { episodes: anikageEps } = await getAnikageEpisodes(slug);
+            if (cancelled) return;
+            if (anikageEps && anikageEps.length > 0) {
+              const formatted = anikageEps
+                .filter(ep => ep.number > 0)
+                .map(ep => ({
+                  mal_id: ep.number,
+                  title: ep.title || `Episode ${ep.number}`,
+                  img: ep.img || null
+                }))
+                .sort((a, b) => a.mal_id - b.mal_id);
+
+              setEpisodes(formatted);
+              setEpisodesLoading(false);
+              return;
+            }
           }
         }
 
-        // 2. Fallback to Tenrai API
+        // 2. If finished/not airing OR Anikage returned no episodes, use Tenrai API
         const data = await getAnimeEpisodes(id);
         if (cancelled) return;
 

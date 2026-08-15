@@ -32,6 +32,23 @@ export default function SettingsModal({ isOpen, onClose }) {
     { id: 'rose-gold', name: 'Rose Gold', color: '#fda4af', bg: '#0f0a0b' }
   ];
 
+  const getServerLabel = (srv) => {
+    switch (srv) {
+      case 'koto': return 'Koto';
+      case 'neko': return 'Neko';
+      case 'db': return 'DB';
+      case 'reanime': return 'Reanime';
+      case 'fouranimo': return '4animo';
+      case '123': return '123';
+      case 'mio': return 'Mio';
+      case 'nexus': return 'Nexus';
+      case 'senshi': return 'Senshi';
+      case 'allanime': return 'AllAnime';
+      case 'hanime': return 'HAnime';
+      default: return 'Koto';
+    }
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content settings-modal" onClick={(e) => e.stopPropagation()}>
@@ -43,7 +60,7 @@ export default function SettingsModal({ isOpen, onClose }) {
         </div>
 
         <div className="settings-modal-body">
-          {/* Default Server Selection (Custom Dropdown like Genre) */}
+          {/* Default Server Selection */}
           <div className="settings-section">
             <h3 className="settings-section-title">Default Streaming Server</h3>
             <p className="settings-section-desc">Choose your preferred source server for watch pages.</p>
@@ -54,12 +71,13 @@ export default function SettingsModal({ isOpen, onClose }) {
                 className={`server-custom-dropdown-btn ${serverDropdownOpen ? 'active' : ''}`}
                 onClick={() => setServerDropdownOpen(prev => !prev)}
               >
-                <span>{defaultServer === 'neko' ? 'Neko' : defaultServer === 'miko' ? 'Miko' : defaultServer === 'koto' ? 'Koto' : defaultServer === '123' ? '123' : defaultServer === 'allanime' ? 'AllAnime' : defaultServer === 'hanime' ? 'HAnime' : defaultServer === 'nexus' ? 'Nexus' : defaultServer === 'senshi' ? 'Senshi' : defaultServer === 'reanime' ? 'Reanime' : defaultServer === 'fouranimo' ? '4animo' : defaultServer === 'mio' ? 'Mio' : 'DB'}</span>
+                <span>{getServerLabel(defaultServer)}</span>
                 <ChevronDown size={16} className={`server-custom-dropdown-chevron ${serverDropdownOpen ? 'rotated' : ''}`} />
               </button>
 
               {serverDropdownOpen && (
                 <div className="server-custom-dropdown-menu animate-scale-in">
+                  {/* 1. KOTO */}
                   <button
                     type="button"
                     className={`server-custom-dropdown-option ${defaultServer === 'koto' ? 'selected' : ''}`}
@@ -71,9 +89,10 @@ export default function SettingsModal({ isOpen, onClose }) {
                     <span className="server-option-check-box">
                       {defaultServer === 'koto' && <Check size={10} strokeWidth={3} />}
                     </span>
-                    <span>Koto <span className="server-dropdown-tag best">Fast</span><span className="server-dropdown-tag">EN</span><span className="server-dropdown-tag ads">Ads</span></span>
+                    <span>Koto <span className="server-dropdown-tag best">Fast</span><span className="server-dropdown-tag">EN</span></span>
                   </button>
 
+                  {/* 2. NEKO */}
                   <button
                     type="button"
                     className={`server-custom-dropdown-option ${defaultServer === 'neko' ? 'selected' : ''}`}
@@ -88,34 +107,22 @@ export default function SettingsModal({ isOpen, onClose }) {
                     <span>Neko <span className="server-dropdown-tag best">Fast</span><span className="server-dropdown-tag">EN</span></span>
                   </button>
 
+                  {/* 3. DB */}
                   <button
                     type="button"
-                    className={`server-custom-dropdown-option ${defaultServer === 'nexus' ? 'selected' : ''}`}
+                    className={`server-custom-dropdown-option ${defaultServer === 'db' ? 'selected' : ''}`}
                     onClick={() => {
-                      setDefaultServer('nexus');
+                      setDefaultServer('db');
                       setServerDropdownOpen(false);
                     }}
                   >
                     <span className="server-option-check-box">
-                      {defaultServer === 'nexus' && <Check size={10} strokeWidth={3} />}
+                      {defaultServer === 'db' && <Check size={10} strokeWidth={3} />}
                     </span>
-                    <span>Nexus <span className="server-dropdown-tag best">Fast</span><span className="server-dropdown-tag">EN</span></span>
+                    <span>DB <span className="server-dropdown-tag best">EN</span><span className="server-dropdown-tag">Sub</span></span>
                   </button>
 
-                  <button
-                    type="button"
-                    className={`server-custom-dropdown-option ${defaultServer === 'senshi' ? 'selected' : ''}`}
-                    onClick={() => {
-                      setDefaultServer('senshi');
-                      setServerDropdownOpen(false);
-                    }}
-                  >
-                    <span className="server-option-check-box">
-                      {defaultServer === 'senshi' && <Check size={10} strokeWidth={3} />}
-                    </span>
-                    <span>Senshi <span className="server-dropdown-tag best">Fast</span><span className="server-dropdown-tag">EN</span></span>
-                  </button>
-
+                  {/* 4. REANIME */}
                   <button
                     type="button"
                     className={`server-custom-dropdown-option ${defaultServer === 'reanime' ? 'selected' : ''}`}
@@ -130,6 +137,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                     <span>Reanime <span className="server-dropdown-tag best">Fast</span><span className="server-dropdown-tag">EN</span></span>
                   </button>
 
+                  {/* 5. 4ANIMO */}
                   <button
                     type="button"
                     className={`server-custom-dropdown-option ${defaultServer === 'fouranimo' ? 'selected' : ''}`}
@@ -144,22 +152,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                     <span>4animo <span className="server-dropdown-tag best">Fast</span><span className="server-dropdown-tag">EN</span></span>
                   </button>
 
-                  <button
-                    type="button"
-                    className={`server-custom-dropdown-option ${defaultServer === 'mio' ? 'selected' : ''}`}
-                    onClick={() => {
-                      setDefaultServer('mio');
-                      setServerDropdownOpen(false);
-                    }}
-                  >
-                    <span className="server-option-check-box">
-                      {defaultServer === 'mio' && <Check size={10} strokeWidth={3} />}
-                    </span>
-                    <span>Mio <span className="server-dropdown-tag best">Fast</span><span className="server-dropdown-tag">TH</span></span>
-                  </button>
-
-
-
+                  {/* 6. 123 */}
                   <button
                     type="button"
                     className={`server-custom-dropdown-option ${defaultServer === '123' ? 'selected' : ''}`}
@@ -174,6 +167,52 @@ export default function SettingsModal({ isOpen, onClose }) {
                     <span>123 <span className="server-dropdown-tag">EN</span></span>
                   </button>
 
+                  {/* 7. MIO */}
+                  <button
+                    type="button"
+                    className={`server-custom-dropdown-option ${defaultServer === 'mio' ? 'selected' : ''}`}
+                    onClick={() => {
+                      setDefaultServer('mio');
+                      setServerDropdownOpen(false);
+                    }}
+                  >
+                    <span className="server-option-check-box">
+                      {defaultServer === 'mio' && <Check size={10} strokeWidth={3} />}
+                    </span>
+                    <span>Mio <span className="server-dropdown-tag">TH</span></span>
+                  </button>
+
+                  {/* 8. NEXUS */}
+                  <button
+                    type="button"
+                    className={`server-custom-dropdown-option ${defaultServer === 'nexus' ? 'selected' : ''}`}
+                    onClick={() => {
+                      setDefaultServer('nexus');
+                      setServerDropdownOpen(false);
+                    }}
+                  >
+                    <span className="server-option-check-box">
+                      {defaultServer === 'nexus' && <Check size={10} strokeWidth={3} />}
+                    </span>
+                    <span>Nexus <span className="server-dropdown-tag">EN</span></span>
+                  </button>
+
+                  {/* 9. SENSHI */}
+                  <button
+                    type="button"
+                    className={`server-custom-dropdown-option ${defaultServer === 'senshi' ? 'selected' : ''}`}
+                    onClick={() => {
+                      setDefaultServer('senshi');
+                      setServerDropdownOpen(false);
+                    }}
+                  >
+                    <span className="server-option-check-box">
+                      {defaultServer === 'senshi' && <Check size={10} strokeWidth={3} />}
+                    </span>
+                    <span>Senshi <span className="server-dropdown-tag">EN</span></span>
+                  </button>
+
+                  {/* 10. ALLANIME */}
                   <button
                     type="button"
                     className={`server-custom-dropdown-option ${defaultServer === 'allanime' ? 'selected' : ''}`}
@@ -188,20 +227,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                     <span>AllAnime <span className="server-dropdown-tag">EN</span></span>
                   </button>
 
-                  <button
-                    type="button"
-                    className={`server-custom-dropdown-option ${defaultServer === 'db' ? 'selected' : ''}`}
-                    onClick={() => {
-                      setDefaultServer('db');
-                      setServerDropdownOpen(false);
-                    }}
-                  >
-                    <span className="server-option-check-box">
-                      {defaultServer === 'db' && <Check size={10} strokeWidth={3} />}
-                    </span>
-                    <span>DB <span className="server-dropdown-tag best">Fast</span><span className="server-dropdown-tag">Sub</span></span>
-                  </button>
-
+                  {/* 11. HANIME */}
                   <button
                     type="button"
                     className={`server-custom-dropdown-option ${defaultServer === 'hanime' ? 'selected' : ''}`}

@@ -28,6 +28,22 @@
   <script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/artplayer@5.1.1/dist/artplayer.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/artplayer-plugin-jassub/dist/artplayer-plugin-jassub.js"></script>
+  <script>
+    window.M_ID = window.M_ID || {};
+    window.addEventListener('unhandledrejection', function(event) {
+      if (event.reason && (
+        (event.reason.message && event.reason.message.includes('M_ID')) ||
+        (event.reason.stack && event.reason.stack.includes('200.js'))
+      )) {
+        event.preventDefault();
+      }
+    });
+    window.addEventListener('error', function(event) {
+      if (event.message && event.message.includes('M_ID')) {
+        event.preventDefault();
+      }
+    }, true);
+  </script>
 </head>
 <body>
   <div class="artplayer-app"></div>
