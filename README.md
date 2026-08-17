@@ -20,6 +20,6 @@ A modern, fast, and feature-rich Anime streaming web application built with Reac
 
 ---
 
-> Last Check : 08/16/2026
+> Last Check : 08/17/2026
 
 > Note : I've been thinking that I'd replace "All Anime" with "AniDB" because I've been trying for long but can't make those two working, But for senshi the main site it currently maintenance
