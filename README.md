@@ -21,3 +21,5 @@ A modern, fast, and feature-rich Anime streaming web application built with Reac
 ---
 
 > Last Check : 08/18/2026
+
+> NOTE : I can now make Neko server working but I'm just too lazy to change it right now XD
