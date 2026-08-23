@@ -20,4 +20,4 @@ A modern, fast, and feature-rich Anime streaming web application built with Reac
 
 ---
 
-> Last Check : 08/20/2026
+> Last Check : 08/23/2026
