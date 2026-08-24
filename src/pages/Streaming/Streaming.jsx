@@ -3,11 +3,11 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Play, Bookmark, ExternalLink, Star, Tv, Clock, Calendar, AlertCircle, ChevronLeft, ChevronRight, X, Loader2, AlertTriangle, MessageSquare, Send, Trash2 } from 'lucide-react';
 import { searchAnikage, getAnikageEpisodes, getAnikageStreams, getBestSource } from '../../services/animepaheApi';
 import { search123Anime, get123AnimeStream } from '../../services/123animeApi';
-import { searchAllAnime, getAllAnimeStream } from '../../services/allanimeApi';
+import { searchOtaku, getOtakuStream } from '../../services/otakuApi';
 import { getHAnimeStreams } from '../../services/hanimeApi';
 import { searchAniDb, getAniDbAnime, getAniDbEpisodeStream, findBestAniDbMatch } from '../../services/aniDbApi';
 import { searchVerse, getVerseStream } from '../../services/verseApi';
-import { getSenshiStream } from '../../services/senshiApi';
+import { searchBd, getBdAnimeDetails, getBdStream } from '../../services/bdApi';
 import { getReanimeEpisodes } from '../../services/reanimeApi';
 import { getAnimeById, getAnimeRelations, getStatusText, getStatusClass } from '../../services/jikanApi';
 
@@ -593,9 +593,9 @@ function Streaming({ onShowAuth }) {
   const [oneTwoThreeEmbedUrl, setOneTwoThreeEmbedUrl] = useState(null);
   const [oneTwoThreeError, setOneTwoThreeError] = useState(null);
 
-  const [allAnimeId, setAllAnimeId] = useState(null);
-  const [allAnimeLoading, setAllAnimeLoading] = useState(false);
-  const [allAnimeError, setAllAnimeError] = useState(null);
+  const [otakuOsid, setOtakuOsid] = useState(null);
+  const [otakuLoading, setOtakuLoading] = useState(false);
+  const [otakuError, setOtakuError] = useState(null);
 
   const [aniDbId, setAniDbId] = useState(null);
   const [aniDbLoading, setAniDbLoading] = useState(false);
@@ -603,6 +603,11 @@ function Streaming({ onShowAuth }) {
   const [aniDbSubtitles, setAniDbSubtitles] = useState([]);
   const [aniDbEpisodes, setAniDbEpisodes] = useState([]);
   const [aniDbEpisodesLoading, setAniDbEpisodesLoading] = useState(false);
+
+  const [bdId, setBdId] = useState(null);
+  const [bdAnimeDetails, setBdAnimeDetails] = useState(null);
+  const [bdLoading, setBdLoading] = useState(false);
+  const [bdError, setBdError] = useState(null);
 
   const [aniZipEpisodes, setAniZipEpisodes] = useState([]);
   const [aniZipLoading, setAniZipLoading] = useState(false);
@@ -750,34 +755,71 @@ function Streaming({ onShowAuth }) {
     }
   }
 
-  // Search AllAnime for matching anime
-  async function searchAllAnimeForAnime(animeData, cancelled) {
-    setAllAnimeLoading(true);
-    setAllAnimeError(null);
+  // Search Otaku for matching anime
+  async function searchOtakuForAnime(animeData, cancelled) {
+    setOtakuLoading(true);
+    setOtakuError(null);
 
     const titles = [...new Set([
       animeData.title_english,
       animeData.title,
       animeData.title_japanese,
+      ...(animeData.title_synonyms || [])
     ].filter(Boolean))];
 
     for (const title of titles) {
       if (cancelled) return;
       try {
-        const match = await searchAllAnime(title);
-        if (match && match.id) {
-          setAllAnimeId(match.id);
-          setAllAnimeLoading(false);
+        const match = await searchOtaku(title);
+        if (match && match.osid) {
+          setOtakuOsid(match.osid);
+          setOtakuLoading(false);
           return;
         }
       } catch (err) {
-        console.error(`AllAnime search failed for "${title}":`, err);
+        console.error(`Otaku search failed for "${title}":`, err);
       }
     }
 
     if (!cancelled) {
-      setAllAnimeError('Anime not found on AllAnime server.');
-      setAllAnimeLoading(false);
+      setOtakuError('Anime not found on Otaku server.');
+      setOtakuLoading(false);
+    }
+  }
+
+  // Search BD for matching anime
+  async function searchBdForAnime(animeData, cancelled) {
+    setBdLoading(true);
+    setBdError(null);
+
+    const titles = [...new Set([
+      animeData.title_english,
+      animeData.title,
+      animeData.title_japanese,
+      ...(animeData.title_synonyms || [])
+    ].filter(Boolean))];
+
+    for (const title of titles) {
+      if (cancelled) return;
+      try {
+        const match = await searchBd(title);
+        if (match && match.id) {
+          setBdId(match.id);
+          const details = await getBdAnimeDetails(match.id);
+          if (!cancelled && details) {
+            setBdAnimeDetails(details);
+          }
+          setBdLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.error(`BD search failed for "${title}":`, err);
+      }
+    }
+
+    if (!cancelled) {
+      setBdError('Anime not found on BD server.');
+      setBdLoading(false);
     }
   }
 
@@ -964,8 +1006,11 @@ function Streaming({ onShowAuth }) {
       setOneTwoThreeId(null);
       setOneTwoThreeEmbedUrl(null);
       setOneTwoThreeError(null);
-      setAllAnimeId(null);
-      setAllAnimeError(null);
+      setOtakuOsid(null);
+      setOtakuError(null);
+      setBdId(null);
+      setBdAnimeDetails(null);
+      setBdError(null);
       setAniDbId(null);
       setAniDbError(null);
       setAniDbSubtitles([]);
@@ -1017,8 +1062,11 @@ function Streaming({ onShowAuth }) {
         // Search 123Anime
         searchOneTwoThreeForAnime(data.data, cancelled);
   
-        // Search AllAnime
-        searchAllAnimeForAnime(data.data, cancelled);
+        // Search Otaku
+        searchOtakuForAnime(data.data, cancelled);
+
+        // Search BD
+        searchBdForAnime(data.data, cancelled);
   
         // Search AniDB
         searchAniDbForAnime(data.data, cancelled);
@@ -1066,7 +1114,7 @@ function Streaming({ onShowAuth }) {
     let cancelled = false;
 
     const fetchStream = async () => {
-      const fetchKey = `${activeServer}-${id}-${currentEpisode}-${aniDbId || ''}-${anikageSlug || ''}-${allAnimeId || ''}`;
+      const fetchKey = `${activeServer}-${id}-${currentEpisode}-${aniDbId || ''}-${anikageSlug || ''}-${otakuOsid || ''}-${bdId || ''}`;
       if (lastStreamFetchKey.current === fetchKey && streamSources.length > 0) {
         return;
       }
@@ -1128,22 +1176,22 @@ function Streaming({ onShowAuth }) {
         } finally {
           if (!cancelled) setSourceLoading(false);
         }
-      } else if (activeServer === 'allanime') {
-        if (!allAnimeId) return;
+      } else if (activeServer === 'otaku') {
+        if (!otakuOsid) return;
         setSourceLoading(true);
         setSourceError(null);
         setStreamSources([]);
 
         try {
-          const data = await getAllAnimeStream(allAnimeId, currentEpisode);
+          const streamUrl = await getOtakuStream(otakuOsid, currentEpisode);
           if (cancelled) return;
-          if (!data || !data.episode_url) {
+          if (!streamUrl) {
             setSourceError('No streaming source for this episode.');
             return;
           }
-          setStreamSources([{ quality: 'AllAnime', streamUrl: data.episode_url }]);
+          setStreamSources([{ quality: 'Auto', streamUrl }]);
         } catch (err) {
-          if (!cancelled) { console.error('AllAnime stream fetch error:', err); setSourceError('Failed to load stream.'); }
+          if (!cancelled) { console.error('Otaku stream fetch error:', err); setSourceError('Failed to load stream.'); }
         } finally {
           if (!cancelled) setSourceLoading(false);
         }
@@ -1233,22 +1281,104 @@ function Streaming({ onShowAuth }) {
         setSourceLoading(false);
         setSourceError(null);
         setStreamSources([]);
-      } else if (activeServer === 'senshi') {
-        if (!anime) return;
+      } else if (activeServer === 'bd') {
+        if (!bdId) return;
         setSourceLoading(true);
         setSourceError(null);
         setStreamSources([]);
 
         try {
-          const sources = await getSenshiStream(anime.mal_id, currentEpisode);
-          if (cancelled) return;
-          if (!sources || sources.length === 0) {
-            setSourceError('No streaming source for this episode on Senshi.');
+          let details = bdAnimeDetails;
+          if (!details) {
+            details = await getBdAnimeDetails(bdId);
+            if (!cancelled && details) {
+              setBdAnimeDetails(details);
+            }
+          }
+
+          if (!details || !Array.isArray(details.servers) || details.servers.length === 0) {
+            setSourceError('No streaming source for this episode on BD.');
             return;
           }
+
+          let targetDataId = null;
+          const targetEpNum = String(currentEpisode);
+          const targetEpPadded = String(currentEpisode).padStart(2, '0');
+
+          for (const srv of details.servers) {
+            if (Array.isArray(srv.episodes)) {
+              const epMatch = srv.episodes.find(ep => ep.name === targetEpNum || ep.name === targetEpPadded || ep.slug === targetEpNum || ep.slug === targetEpPadded || parseInt(ep.name, 10) === currentEpisode);
+              if (epMatch && epMatch.dataId) {
+                targetDataId = epMatch.dataId;
+                break;
+              }
+            }
+          }
+
+          if (!targetDataId) {
+            for (const srv of details.servers) {
+              if (Array.isArray(srv.episodes) && srv.episodes[currentEpisode - 1]) {
+                targetDataId = srv.episodes[currentEpisode - 1].dataId;
+                if (targetDataId) break;
+              }
+            }
+          }
+
+          if (!targetDataId) {
+            setSourceError('Episode not found on BD server.');
+            return;
+          }
+
+          const watchData = await getBdStream(targetDataId);
+          if (cancelled) return;
+          if (!watchData || !Array.isArray(watchData.sources) || watchData.sources.length === 0) {
+            setSourceError('No streaming source for this episode on BD.');
+            return;
+          }
+
+          const sources = watchData.sources.map(s => {
+            const urlStr = s.url || s.rawUrl || '';
+            let q = 'HD';
+            if (urlStr.includes('1080p')) {
+              q = '1080p';
+            } else if (urlStr.includes('720p')) {
+              q = '720p';
+            } else if (urlStr.includes('480p')) {
+              q = '480p';
+            } else if (urlStr.includes('360p')) {
+              q = '360p';
+            } else if (s.server === 'R-HD') {
+              q = '1080p';
+            } else if (s.server === 'SR') {
+              q = '720p';
+            } else if (s.quality && !s.quality.includes('index')) {
+              q = s.quality;
+            }
+            return {
+              quality: q,
+              streamUrl: urlStr
+            };
+          });
+
           setStreamSources(sources);
+
+          if (Array.isArray(watchData.subtitles) && watchData.subtitles.length > 0) {
+            const uniqueSubs = [];
+            const seenFiles = new Set();
+            for (const sub of watchData.subtitles) {
+              const fileUrl = sub.file || sub.src || sub.url;
+              if (fileUrl && !seenFiles.has(fileUrl)) {
+                seenFiles.add(fileUrl);
+                uniqueSubs.push({
+                  ...sub,
+                  default: uniqueSubs.length === 0
+                });
+              }
+            }
+            setSubtitles(uniqueSubs);
+          }
         } catch (err) {
-          if (!cancelled) { console.error('Senshi stream fetch error:', err); setSourceError('Failed to load stream.'); }
+          if (!cancelled) { console.error('BD stream fetch error:', err); setSourceError('Failed to load stream.'); }
         } finally {
           if (!cancelled) setSourceLoading(false);
         }
@@ -1323,7 +1453,7 @@ function Streaming({ onShowAuth }) {
 
     fetchStream();
     return () => { cancelled = true; };
-  }, [activeServer, anikageSlug, oneTwoThreeId, allAnimeId, aniDbId, anilistId, mioEpisodes, mioLoading, currentEpisode, anime, id]);
+  }, [activeServer, anikageSlug, oneTwoThreeId, otakuOsid, bdId, bdAnimeDetails, aniDbId, anilistId, mioEpisodes, mioLoading, currentEpisode, anime, id]);
 
   // ---- Related anime (relations from Jikan API, only anime) ----
   useEffect(() => {
@@ -1648,7 +1778,7 @@ function Streaming({ onShowAuth }) {
 
   // ---- Update watch history when anime and episode are playing ----
   useEffect(() => {
-    if (anime && (streamSources.length > 0 || activeServer === 'koto' || activeServer === 'db' || activeServer === 'nexus' || activeServer === 'reanime' || activeServer === 'fouranimo' || activeServer === 'senshi' || activeServer === 'mio' || (activeServer === '123' && oneTwoThreeEmbedUrl))) {
+    if (anime && (streamSources.length > 0 || activeServer === 'koto' || activeServer === 'db' || activeServer === 'nexus' || activeServer === 'reanime' || activeServer === 'fouranimo' || activeServer === 'bd' || activeServer === 'mio' || (activeServer === '123' && oneTwoThreeEmbedUrl))) {
       updateWatchHistory(anime, currentEpisode, currentEpInfo?.img);
     }
   }, [anime, currentEpisode, streamSources, currentEpInfo, activeServer, oneTwoThreeEmbedUrl]);
@@ -1722,16 +1852,16 @@ function Streaming({ onShowAuth }) {
                   <span>No streaming source available for 123Anime.</span>
                 </div>
               )
-            ) : activeServer === 'allanime' ? (
-              allAnimeLoading || sourceLoading || initialProgress === null ? (
+            ) : activeServer === 'otaku' ? (
+              otakuLoading || sourceLoading || initialProgress === null ? (
                 <div className="streaming-player-loading">
                   <div className="spinner" />
-                  <span>{allAnimeLoading ? 'Finding anime on AllAnime...' : `Loading ep ${currentEpisode}...`}</span>
+                  <span>{otakuLoading ? 'Finding anime on Otaku...' : `Loading ep ${currentEpisode}...`}</span>
                 </div>
-              ) : allAnimeError || sourceError ? (
+              ) : otakuError || sourceError ? (
                 <div className="streaming-player-error">
                   <AlertCircle size={40} />
-                  <span>{allAnimeError || sourceError}</span>
+                  <span>{otakuError || sourceError}</span>
                 </div>
               ) : streamSources.length > 0 ? (
                 IS_IOS && bestSource ? (
@@ -1741,11 +1871,11 @@ function Streaming({ onShowAuth }) {
                     allowFullScreen
                     scrolling="no"
                     allow="autoplay; fullscreen; picture-in-picture"
-                    title={`${titleDisplay} - Episode ${currentEpisode} (AllAnime)`}
+                    title={`${titleDisplay} - Episode ${currentEpisode} (Otaku)`}
                   />
                 ) : (
                   <HlsPlayer
-                    key={`allanime-${id}-${currentEpisode}`}
+                    key={`otaku-${id}-${currentEpisode}`}
                     sources={streamSources}
                     title={`${titleDisplay} - Episode ${currentEpisode}`}
                     intro={introTimestamp}
@@ -1759,7 +1889,7 @@ function Streaming({ onShowAuth }) {
               ) : (
                 <div className="streaming-player-error">
                   <AlertCircle size={40} />
-                  <span>No streaming source available for AllAnime.</span>
+                  <span>No streaming source available for Otaku.</span>
                 </div>
               )
             ) : activeServer === 'hanime' ? (
@@ -1851,6 +1981,36 @@ function Streaming({ onShowAuth }) {
                   allow="autoplay; fullscreen; picture-in-picture"
                   title={`${titleDisplay} - Episode ${currentEpisode} (Nexus)`}
                 />
+              )
+            ) : activeServer === 'bd' ? (
+              bdLoading || sourceLoading || initialProgress === null ? (
+                <div className="streaming-player-loading">
+                  <div className="spinner" />
+                  <span>{bdLoading ? 'Finding anime on BD...' : `Loading ep ${currentEpisode}...`}</span>
+                </div>
+              ) : bdError || sourceError ? (
+                <div className="streaming-player-error">
+                  <AlertCircle size={40} />
+                  <span>{bdError || sourceError}</span>
+                </div>
+              ) : streamSources.length > 0 ? (
+                <HlsPlayer
+                  key={`bd-${id}-${currentEpisode}`}
+                  sources={streamSources}
+                  subtitles={subtitles}
+                  title={`${titleDisplay} - Episode ${currentEpisode}`}
+                  intro={introTimestamp}
+                  outro={outroTimestamp}
+                  initialTime={initialProgress}
+                  onProgress={(time, duration) => {
+                    saveEpisodeProgress(parseInt(id), currentEpisode, time, duration);
+                  }}
+                />
+              ) : (
+                <div className="streaming-player-error">
+                  <AlertCircle size={40} />
+                  <span>No streaming source available for BD.</span>
+                </div>
               )
             ) : activeServer === 'reanime' ? (
               aniZipLoading || reanimeLoading || initialProgress === null ? (
@@ -2500,7 +2660,7 @@ function Streaming({ onShowAuth }) {
                   <span className="server-name">DB</span>
                   <div className="server-tags">
                     <span className="server-tag best">EN</span>
-                    <span className="server-tag">Sub</span>
+                    <span className="server-tag">EN</span>
                   </div>
                 </div>
                 <span className="server-status-dot" />
@@ -2598,35 +2758,36 @@ function Streaming({ onShowAuth }) {
                 <span className="server-status-dot" />
               </button>
 
-              {/* 9. SENSHI */}
+              {/* 9. BD */}
               <button
                 type="button"
-                className={`server-modal-option ${activeServer === 'senshi' ? 'active' : ''}`}
+                className={`server-modal-option ${activeServer === 'bd' ? 'active' : ''}`}
                 onClick={() => {
-                  setActiveServer('senshi');
+                  setActiveServer('bd');
                   setShowServerModal(false);
                 }}
               >
                 <div className="server-modal-details">
-                  <span className="server-name">Senshi</span>
+                  <span className="server-name">BD</span>
                   <div className="server-tags">
+                    <span className="server-tag best">Fast</span>
                     <span className="server-tag">EN</span>
                   </div>
                 </div>
                 <span className="server-status-dot" />
               </button>
 
-              {/* 10. ALLANIME */}
+              {/* 10. OTAKU */}
               <button
                 type="button"
-                className={`server-modal-option ${activeServer === 'allanime' ? 'active' : ''}`}
+                className={`server-modal-option ${activeServer === 'otaku' ? 'active' : ''}`}
                 onClick={() => {
-                  setActiveServer('allanime');
+                  setActiveServer('otaku');
                   setShowServerModal(false);
                 }}
               >
                 <div className="server-modal-details">
-                  <span className="server-name">AllAnime</span>
+                  <span className="server-name">Otaku</span>
                   <div className="server-tags">
                     <span className="server-tag">EN</span>
                   </div>
@@ -2686,14 +2847,14 @@ function Streaming({ onShowAuth }) {
                   >
                     <option value="koto">Koto (EN)</option>
                     <option value="neko">Neko (EN/FAST)</option>
-                    <option value="db">DB (EN/Sub)</option>
+                    <option value="db">DB (EN/EN)</option>
                     <option value="reanime">Reanime (EN/FAST)</option>
                     <option value="fouranimo">4animo (EN/FAST)</option>
                     <option value="123">123 (EN)</option>
                     <option value="mio">Mio (TH)</option>
                     <option value="nexus">Nexus (EN)</option>
-                    <option value="senshi">Senshi (EN)</option>
-                    <option value="allanime">AllAnime (EN)</option>
+                    <option value="bd">BD (EN/FAST)</option>
+                    <option value="otaku">Otaku (EN)</option>
                     <option value="zone" style={{ display: 'none' }}>Zone (EN)</option>
                     <option value="hanime">HAnime (18+ EN)</option>
                   </select>

@@ -9,15 +9,15 @@ A modern, fast, and feature-rich Anime streaming web application built with Reac
 | Koto | 🟢 |
 | Neko | 🟢 |
 | Nexus | 🟢 |
-| Senshi | 🔴 |
 | Re:Anime | 🟢 |
 | 4animo | 🟢 |
 | Mio | 🟢 |
 | 123 | 🟢 |
-| All Anime | 🔴 |
+| Otaku | 🟢 |
+| BD | 🟢 |
 | DB | 🟢 |
 | Hanime | 🟢 |
 
 ---
 
-> Last Check : 08/23/2026
+> Last Check : 08/24/2026

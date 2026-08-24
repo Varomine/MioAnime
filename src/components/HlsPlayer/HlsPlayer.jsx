@@ -22,7 +22,7 @@ function preloadHls() {
 }
 if (!USE_NATIVE_HLS) preloadHls(); // start loading immediately
 
-export default function HlsPlayer({ sources, poster, intro, outro, initialTime = 0, onProgress }) {
+export default function HlsPlayer({ sources, subtitles = [], poster, intro, outro, initialTime = 0, onProgress }) {
   const containerRef = useRef(null);
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
@@ -43,6 +43,10 @@ export default function HlsPlayer({ sources, poster, intro, outro, initialTime =
   const [showSkipIntro, setShowSkipIntro] = useState(false);
   const [showSkipOutro, setShowSkipOutro] = useState(false);
 
+  // Subtitle Selection State: 0 is first track, -1 is Off
+  const [selectedSubtitle, setSelectedSubtitle] = useState(0);
+  const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
+
   const introRef = useRef(intro);
   const outroRef = useRef(outro);
   const onProgressRef = useRef(onProgress);
@@ -62,6 +66,15 @@ export default function HlsPlayer({ sources, poster, intro, outro, initialTime =
   useEffect(() => {
     lastTimeRef.current = initialTime;
   }, [sources, initialTime]);
+
+  // Reset subtitle selection to first track (0) when subtitles change
+  useEffect(() => {
+    if (subtitles && subtitles.length > 0) {
+      setSelectedSubtitle(0);
+    } else {
+      setSelectedSubtitle(-1);
+    }
+  }, [subtitles]);
 
   const qualityOptions = sources?.length > 0
     ? (sources.length > 1 ? ['auto', ...sources.map(s => s.quality)] : [sources[0].quality])
@@ -94,6 +107,28 @@ export default function HlsPlayer({ sources, poster, intro, outro, initialTime =
   }, []);
 
   const streamUrl = getStreamUrl(currentQuality);
+
+  // Synchronize active subtitle track mode on video element
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !subtitles || subtitles.length === 0) return;
+
+    const applySubtitleTrack = () => {
+      if (video.textTracks) {
+        for (let i = 0; i < video.textTracks.length; i++) {
+          video.textTracks[i].mode = (i === selectedSubtitle) ? 'showing' : 'disabled';
+        }
+      }
+    };
+
+    applySubtitleTrack();
+    video.addEventListener('loadedmetadata', applySubtitleTrack);
+    video.addEventListener('loadeddata', applySubtitleTrack);
+    return () => {
+      video.removeEventListener('loadedmetadata', applySubtitleTrack);
+      video.removeEventListener('loadeddata', applySubtitleTrack);
+    };
+  }, [subtitles, selectedSubtitle]);
 
   // ---- MAIN: Initialize player ----
   useEffect(() => {
@@ -569,11 +604,34 @@ export default function HlsPlayer({ sources, poster, intro, outro, initialTime =
   return (
     <div ref={containerRef} className={`vp ${isFullscreen ? 'vp--fullscreen' : ''} ${showControls ? 'vp--show-controls' : ''}`}
       onMouseMove={resetControlsTimer} onTouchStart={resetControlsTimer}
-      onClick={(e) => { if (showQualityMenu && !e.target.closest('.vp-quality')) setShowQualityMenu(false); }}
+      onClick={(e) => {
+        if (showQualityMenu && !e.target.closest('.vp-quality')) setShowQualityMenu(false);
+        if (showSubtitleMenu && !e.target.closest('.vp-subtitle')) setShowSubtitleMenu(false);
+      }}
       tabIndex={0}>
 
-      <video ref={videoRef} className="vp-video" playsInline webkit-playsinline=""
-        poster={poster} preload="auto" onClick={togglePlay} onDoubleClick={toggleFullscreen} />
+      <video
+        ref={videoRef}
+        className="vp-video"
+        playsInline
+        webkit-playsinline=""
+        crossOrigin="anonymous"
+        poster={poster}
+        preload="auto"
+        onClick={togglePlay}
+        onDoubleClick={toggleFullscreen}
+      >
+        {subtitles && subtitles.map((sub, idx) => (
+          <track
+            key={`${sub.file || sub.url || idx}-${idx}`}
+            kind={sub.kind || 'subtitles'}
+            label={sub.label || `Track ${idx + 1}`}
+            src={sub.file || sub.src || sub.url}
+            srcLang={sub.srclang || sub.lang || 'en'}
+            default={idx === selectedSubtitle}
+          />
+        ))}
+      </video>
 
       {loading && <div className="vp-overlay vp-loading"><div className="vp-spinner" /></div>}
 
@@ -641,9 +699,69 @@ export default function HlsPlayer({ sources, poster, intro, outro, initialTime =
           </div>
 
           <div className="vp-controls-right">
+            {subtitles && subtitles.length > 0 && (
+              <div className="vp-subtitle">
+                <button
+                  className={`vp-btn vp-cc-btn ${selectedSubtitle >= 0 ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowSubtitleMenu(!showSubtitleMenu);
+                    setShowQualityMenu(false);
+                  }}
+                  aria-label="Subtitles"
+                  title="Subtitles (CC)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <path d="M7 15h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2H7" />
+                    <path d="M15 15h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2h-2" />
+                  </svg>
+                </button>
+                {showSubtitleMenu && (
+                  <div className="vp-subtitle-menu">
+                    <button
+                      className={`vp-subtitle-option ${selectedSubtitle === -1 ? 'active' : ''}`}
+                      onClick={() => {
+                        setSelectedSubtitle(-1);
+                        setShowSubtitleMenu(false);
+                      }}
+                    >
+                      Off
+                      {selectedSubtitle === -1 && <span className="vp-subtitle-check">✓</span>}
+                    </button>
+                    {subtitles.map((sub, idx) => {
+                      let labelText = sub.label || `Track ${idx + 1}`;
+                      const sameLabelCount = subtitles.filter(s => (s.label || 'English') === labelText).length;
+                      if (sameLabelCount > 1) {
+                        labelText = `${labelText} (${idx + 1})`;
+                      }
+                      return (
+                        <button
+                          key={idx}
+                          className={`vp-subtitle-option ${selectedSubtitle === idx ? 'active' : ''}`}
+                          onClick={() => {
+                            setSelectedSubtitle(idx);
+                            setShowSubtitleMenu(false);
+                          }}
+                        >
+                          {labelText}
+                          {selectedSubtitle === idx && <span className="vp-subtitle-check">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {qualityOptions.length > 1 && (
               <div className="vp-quality">
-                <button className="vp-btn vp-quality-btn" onClick={() => setShowQualityMenu(!showQualityMenu)}>
+                <button
+                  className="vp-btn vp-quality-btn"
+                  onClick={() => {
+                    setShowQualityMenu(!showQualityMenu);
+                    setShowSubtitleMenu(false);
+                  }}
+                >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
                     <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                   </svg>

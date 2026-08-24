@@ -42,8 +42,8 @@ export default function SettingsModal({ isOpen, onClose }) {
       case '123': return '123';
       case 'mio': return 'Mio';
       case 'nexus': return 'Nexus';
-      case 'senshi': return 'Senshi';
-      case 'allanime': return 'AllAnime';
+      case 'bd': return 'BD';
+      case 'otaku': return 'Otaku';
       case 'hanime': return 'HAnime';
       default: return 'Koto';
     }
@@ -119,7 +119,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                     <span className="server-option-check-box">
                       {defaultServer === 'db' && <Check size={10} strokeWidth={3} />}
                     </span>
-                    <span>DB <span className="server-dropdown-tag best">EN</span><span className="server-dropdown-tag">Sub</span></span>
+                    <span>DB <span className="server-dropdown-tag best">EN</span><span className="server-dropdown-tag">EN</span></span>
                   </button>
 
                   {/* 4. REANIME */}
@@ -197,34 +197,34 @@ export default function SettingsModal({ isOpen, onClose }) {
                     <span>Nexus <span className="server-dropdown-tag">EN</span></span>
                   </button>
 
-                  {/* 9. SENSHI */}
+                  {/* 9. BD */}
                   <button
                     type="button"
-                    className={`server-custom-dropdown-option ${defaultServer === 'senshi' ? 'selected' : ''}`}
+                    className={`server-custom-dropdown-option ${defaultServer === 'bd' ? 'selected' : ''}`}
                     onClick={() => {
-                      setDefaultServer('senshi');
+                      setDefaultServer('bd');
                       setServerDropdownOpen(false);
                     }}
                   >
                     <span className="server-option-check-box">
-                      {defaultServer === 'senshi' && <Check size={10} strokeWidth={3} />}
+                      {defaultServer === 'bd' && <Check size={10} strokeWidth={3} />}
                     </span>
-                    <span>Senshi <span className="server-dropdown-tag">EN</span></span>
+                    <span>BD <span className="server-dropdown-tag best">Fast</span><span className="server-dropdown-tag">EN</span></span>
                   </button>
 
-                  {/* 10. ALLANIME */}
+                  {/* 10. OTAKU */}
                   <button
                     type="button"
-                    className={`server-custom-dropdown-option ${defaultServer === 'allanime' ? 'selected' : ''}`}
+                    className={`server-custom-dropdown-option ${defaultServer === 'otaku' ? 'selected' : ''}`}
                     onClick={() => {
-                      setDefaultServer('allanime');
+                      setDefaultServer('otaku');
                       setServerDropdownOpen(false);
                     }}
                   >
                     <span className="server-option-check-box">
-                      {defaultServer === 'allanime' && <Check size={10} strokeWidth={3} />}
+                      {defaultServer === 'otaku' && <Check size={10} strokeWidth={3} />}
                     </span>
-                    <span>AllAnime <span className="server-dropdown-tag">EN</span></span>
+                    <span>Otaku <span className="server-dropdown-tag">EN</span></span>
                   </button>
 
                   {/* 11. HANIME */}

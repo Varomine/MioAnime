@@ -28,6 +28,35 @@
 /* Hide native controls — we have custom ones */
 .vp-video::-webkit-media-controls { display: none !important; }
 
+/* ---- Netflix-Style Subtitles (::cue) Styling ---- */
+.vp-video::cue {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #ffffff !important;
+  font-family: 'Netflix Sans', 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif !important;
+  font-size: 1.35rem !important;
+  font-weight: 700 !important;
+  font-style: normal !important;
+  line-height: 1.4 !important;
+  padding: 0 4px !important;
+  text-shadow: 
+    0 0 4px #000000, 
+    0 0 4px #000000, 
+    0 0 4px #000000,
+    -1.5px -1.5px 0 #000000,
+    1.5px -1.5px 0 #000000,
+    -1.5px 1.5px 0 #000000,
+    1.5px 1.5px 0 #000000,
+    0 2px 6px rgba(0, 0, 0, 0.95) !important;
+  -webkit-text-stroke: 0.5px rgba(0, 0, 0, 0.8) !important;
+  transform: translateY(-50px) !important;
+}
+
+/* Lift subtitles higher above controls bar when player controls are visible */
+.vp--show-controls .vp-video::cue {
+  transform: translateY(-95px) !important;
+}
+
 /* ---- Overlays ---- */
 .vp-overlay {
   position: absolute;
@@ -264,6 +293,68 @@
 .vp-btn:hover {
   color: #fff;
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* ---- Subtitles Selector ---- */
+.vp-subtitle {
+  position: relative;
+}
+
+.vp-cc-btn {
+  opacity: 0.6;
+  transition: opacity 0.2s, color 0.2s, background 0.2s;
+}
+
+.vp-cc-btn.active {
+  opacity: 1;
+  color: var(--accent-gold);
+}
+
+.vp-subtitle-menu {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  min-width: 150px;
+  background: rgba(15, 15, 15, 0.97);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  animation: vp-fadeUp 0.2s ease;
+  z-index: 10;
+}
+
+.vp-subtitle-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: none;
+  border: none;
+  text-align: left;
+}
+
+.vp-subtitle-option:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.vp-subtitle-option.active {
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+.vp-subtitle-check {
+  font-size: 14px;
+  color: var(--accent-gold);
 }
 
 /* ---- Volume ---- */
