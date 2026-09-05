@@ -15,9 +15,9 @@ A modern, fast, and feature-rich Anime streaming web application built with Reac
 | 123 | 🟢 |
 | Otaku | 🟢 |
 | BD | 🟢 |
-| DB | 🟢 |
+| DB | 🔴 |
 | Hanime | 🟢 |
 
 ---
 
-> Last Check : 08/28/2026
+> Last Check : 09/05/2026 (MM/DD/YYYY)
